@@ -39,7 +39,7 @@ export interface ClassifiedAgenda {
 
 export interface ClassifiedOther {
   kind: 'other' | 'qr';
-  text: string;
+  text?: unknown;
 }
 
 export type ClassificationResult =

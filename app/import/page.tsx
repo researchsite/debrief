@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import type { ClassificationResult } from '@/lib/classify';
+import { formatImportText } from '@/lib/import-text';
 import Link from 'next/link';
 
 interface FileResult {
@@ -500,15 +501,19 @@ function ReviewCard({ fr, onSave, onDismiss, onToggleEdit, onUpdateField }: Revi
       );
 
     default: {
-      const other = result as { kind: string; text?: string };
+      const other = result as { kind: string; text?: unknown };
+      const text = formatImportText(other.text);
       return (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">📄 {other.kind === 'qr' ? 'QR Code' : 'Other'}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            {other.text && <p className="text-sm text-muted-foreground">{other.text}</p>}
-            <Button variant="outline" className="w-full" onClick={onDismiss}>Dismiss</Button>
+            {text && <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">{text}</p>}
+            <div className="flex gap-2">
+              <Button className="flex-1" onClick={onSave}>Save import</Button>
+              <Button variant="outline" onClick={onDismiss}>Dismiss</Button>
+            </div>
           </CardContent>
         </Card>
       );
