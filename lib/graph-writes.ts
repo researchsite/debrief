@@ -336,6 +336,135 @@ export async function getContext(personUrl: string, graphName?: string): Promise
   };
 }
 
+// ────────────────────────────────────────────────────────────
+// Coupon / Asset graph writes
+// ────────────────────────────────────────────────────────────
+
+export interface CouponInput {
+  code: string;
+  vendor: string;
+  value: string;
+  description: string;
+  expires: string | null;     // ISO date string or null
+  terms: string;
+  redeemUrl: string;
+  assetPath: string;          // file path of the original upload
+  eventName?: string;         // link to current event if known
+}
+
+export async function writeCoupon(input: CouponInput, graphName?: string): Promise<void> {
+  const { code, vendor, value, description, expires, terms, redeemUrl, assetPath, eventName } = input;
+
+  await query(
+    `MERGE (coupon:Coupon {code: $code})
+     SET coupon.vendor = $vendor, coupon.value = $value, coupon.description = $description,
+         coupon.expires = $expires, coupon.terms = $terms, coupon.redeem_url = $redeemUrl,
+         coupon.used = false`,
+    { code, vendor, value, description, expires: expires ?? null, terms, redeemUrl },
+    graphName,
+  );
+
+  await query(
+    `MERGE (company:Company {name: $vendor})
+     WITH company
+     MATCH (coupon:Coupon {code: $code})
+     MERGE (coupon)-[:FROM]->(company)`,
+    { vendor, code },
+    graphName,
+  );
+
+  await query(
+    `MERGE (asset:Asset {file_path: $assetPath})
+     SET asset.kind = 'coupon', asset.extracted_text = $code
+     WITH asset
+     MATCH (coupon:Coupon {code: $code})
+     MERGE (asset)-[:EXTRACTED]->(coupon)`,
+    { assetPath, code },
+    graphName,
+  );
+
+  if (eventName) {
+    await query(
+      `MATCH (e:Event {name: $eventName})
+       MATCH (coupon:Coupon {code: $code})
+       MERGE (coupon)-[:AT]->(e)`,
+      { eventName, code },
+      graphName,
+    );
+  }
+}
+
+export interface AssetInput {
+  kind: 'slide' | 'deck' | 'coupon' | 'badge' | 'business_card' | 'agenda' | 'qr' | 'other';
+  filePath: string;
+  extractedText: string;
+}
+
+export async function writeAsset(input: AssetInput, graphName?: string): Promise<string> {
+  const { kind, filePath, extractedText } = input;
+
+  await query(
+    `MERGE (a:Asset {file_path: $filePath})
+     SET a.kind = $kind, a.extracted_text = $extractedText`,
+    { filePath, kind, extractedText },
+    graphName,
+  );
+
+  return filePath;
+}
+
+export interface CouponData {
+  code: string;
+  vendor: string;
+  value: string;
+  description: string;
+  expires: string | null;
+  terms: string;
+  redeemUrl: string;
+  used: boolean;
+  assetPath: string;
+}
+
+export async function getCoupons(graphName?: string): Promise<CouponData[]> {
+  const result = await roQuery(
+    `MATCH (coupon:Coupon)
+     OPTIONAL MATCH (coupon)-[:FROM]->(company:Company)
+     OPTIONAL MATCH (asset:Asset)-[:EXTRACTED]->(coupon)
+     RETURN coupon.code AS code,
+            coalesce(company.name, coupon.vendor) AS vendor,
+            coupon.value AS value,
+            coupon.description AS description,
+            coupon.expires AS expires,
+            coupon.terms AS terms,
+            coupon.redeem_url AS redeemUrl,
+            coupon.used AS used,
+            coalesce(asset.file_path, '') AS assetPath
+     ORDER BY coupon.expires ASC`,
+    {},
+    graphName,
+  );
+
+  return (result.data ?? []).map((row: Record<string, unknown>) => ({
+    code: String(row.code ?? ''),
+    vendor: String(row.vendor ?? ''),
+    value: String(row.value ?? ''),
+    description: String(row.description ?? ''),
+    expires: row.expires != null ? String(row.expires) : null,
+    terms: String(row.terms ?? ''),
+    redeemUrl: String(row.redeemUrl ?? ''),
+    used: Boolean(row.used ?? false),
+    assetPath: String(row.assetPath ?? ''),
+  }));
+}
+
+export async function markCouponUsed(code: string, graphName?: string): Promise<void> {
+  await query(
+    'MATCH (c:Coupon {code: $code}) SET c.used = true',
+    { code },
+    graphName,
+  );
+}
+
 export async function writeLinkedInArchive(
   linkedinUrl: string,
   archive: LinkedInArchive,
