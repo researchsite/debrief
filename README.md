@@ -84,6 +84,21 @@ Go to http://localhost:3001/setup and:
 - Upload your LinkedIn archive CSVs (`Profile.csv`, `Positions.csv`, `Education.csv`, `Skills.csv`)
 - Upload `Connections.csv` when it arrives from LinkedIn
 
+### FalkorDB Cloud conference graph
+The conference graph uses the full TLS URL from your FalkorDB Cloud lab. Save it as `FALKORDB_URL` in the ignored `.env` file; leave only a blank placeholder in `.env.example` and keep the URL out of version control.
+
+Create or refresh the conference demo graph:
+```bash
+npm run setup:conference
+```
+
+Import a LinkedIn ZIP directly into the same `conference` graph:
+```bash
+npm run import:linkedin -- /path/to/LinkedIn-export.zip
+```
+
+The importer reads `Profile.csv`, `Positions.csv`, `Education.csv`, `Skills.csv`, and `Connections.csv` directly from the ZIP. It adds your profile, skills, work history, education, and LinkedIn connections without extracting the archive or importing messages, email addresses, saved answers, or private identity records. Re-running it updates the same graph records.
+
 ---
 
 ## Environment Variables
