@@ -82,6 +82,13 @@ export async function POST(req: NextRequest): Promise<NextResponse<ResponseBody>
   // 4. Get common ground
   const commonGround = await getCommonGround(linkedinUrl);
 
+  // 5. Fire-and-forget research (non-blocking)
+  void fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'}/api/research`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ personUrl: linkedinUrl }),
+  }).catch(() => {});
+
   return NextResponse.json({
     ok: true,
     person: {
