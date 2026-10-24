@@ -1034,12 +1034,23 @@ export async function getRecapIdeas(graphName?: string): Promise<RecapIdea[]> {
 }
 
 export async function saveFollowUp(fu: FollowUpDraft, graphName?: string): Promise<void> {
+  // A generated draft belongs to a contact; the generated wording is mutable.
+  // Keep the upsert and legacy cleanup atomic, including overlapping requests.
   await query(
-    `MATCH (me:Me) MATCH (p:Person {linkedin_url: $url})
-     MERGE (f:FollowUp {message: $message}) SET f.status = 'todo',
+    `MATCH (me:Me), (p:Person)
+     WHERE coalesce(p.linkedin_url, p.id) = $url
+     MERGE (me)-[:FOLLOW_UP]->(f:FollowUp {draft_for: $url})
+     SET f.message = $message, f.status = 'todo',
        f.note_source = $noteSource, f.context_source = $contextSource
-     MERGE (me)-[:FOLLOW_UP]->(f)
-     MERGE (f)-[:FOR]->(p)`,
+     MERGE (f)-[:FOR]->(p)
+     WITH me, p, f
+     OPTIONAL MATCH (me)-[:FOLLOW_UP]->(old:FollowUp)-[r:FOR]->(p)
+     WHERE old <> f AND old.note_source IS NOT NULL AND old.context_source IS NOT NULL
+     OPTIONAL MATCH (old)-[:FOR]->(other:Person) WHERE other <> p
+     WITH old, r, count(other) AS otherRecipients
+     FOREACH (obsolete IN CASE WHEN old IS NOT NULL AND otherRecipients = 0 THEN [old] ELSE [] END |
+       DETACH DELETE obsolete)
+     FOREACH (link IN CASE WHEN otherRecipients > 0 THEN [r] ELSE [] END | DELETE link)`,
     {
       url: fu.personUrl,
       message: fu.message,
@@ -1056,7 +1067,8 @@ export async function getFollowUps(
   const result = await roQuery(
     `MATCH (me:Me)-[:FOLLOW_UP]->(f:FollowUp)-[:FOR]->(p:Person)
      OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
-     RETURN p.name AS personName, coalesce(p.linkedin_url, p.id) AS personUrl, c.name AS company,
+     RETURN p.name AS personName, coalesce(p.linkedin_url, p.id) AS personUrl,
+            head(collect(c.name)) AS company,
             f.message AS message, f.status AS status,
             f.note_source AS noteSource, f.context_source AS contextSource`,
     {},

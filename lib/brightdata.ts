@@ -110,23 +110,38 @@ export async function serpSearch(
   const apiKey = process.env.BRIGHTDATA_API_KEY;
   const zone = process.env.BRIGHTDATA_SERP_ZONE ?? 'serp_api1';
 
+  const requestBody = {
+    url: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
+    format: 'json',
+  };
   const response = await fetch('https://api.brightdata.com/request', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      zone,
-      url: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
-      format: 'json',
-    }),
+    body: JSON.stringify({ zone, ...requestBody }),
   });
 
   if (!response.ok) {
-    throw new Error(
-      `Bright Data serpSearch failed: ${response.status} ${response.statusText}`,
-    );
+    // Some Bright Data accounts do not have a dedicated SERP zone, while the
+    // Web Unlocker zone is available. Fall back to its raw Google response so
+    // research still works with the configured credentials.
+    const fallbackZone = process.env.BRIGHTDATA_UNLOCKER_ZONE;
+    if (!fallbackZone || response.status < 400) {
+      throw new Error(`Bright Data serpSearch failed: ${response.status} ${response.statusText}`);
+    }
+    const fallback = await fetch('https://api.brightdata.com/request', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zone: fallbackZone, ...requestBody, format: 'raw' }),
+    });
+    if (!fallback.ok) throw new Error(`Bright Data research search failed: ${fallback.status} ${fallback.statusText}`);
+    const fallbackBody = await fallback.text();
+    const parsed = parseSerpHtml(fallbackBody);
+    if (parsed.length > 0) return parsed;
+    const text = fallbackBody.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    return text ? [{ url: requestBody.url, title: `Google results for ${query}`, snippet: text.slice(0, 4000) }] : [];
   }
 
   const result = (await response.json()) as { status_code: number; body: string };
@@ -189,6 +204,18 @@ function parseSerpHtml(body: string): SerpResult[] {
       snippet: r.description ?? '',
     }));
   } catch {
-    return [];
+    const results: SerpResult[] = [];
+    const headingPattern = /<h3[^>]*>([\s\S]*?)<\/h3>/gi;
+    const hrefPattern = /href=\\?["']([^"']+)\\?["']/gi;
+    for (const match of body.matchAll(headingPattern)) {
+      const beforeHeading = body.slice(Math.max(0, (match.index ?? 0) - 2500), match.index ?? 0);
+      const hrefs = [...beforeHeading.matchAll(hrefPattern)];
+      const href = hrefs.at(-1)?.[1]?.replace(/\\"/g, '"') ?? '';
+      const url = href.startsWith('/url?q=') ? decodeURIComponent(href.slice(7).split('&')[0]) : href;
+      const title = match[1].replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim();
+      if (title && /^https?:\/\//.test(url)) results.push({ url, title, snippet: '' });
+      if (results.length === 5) break;
+    }
+    return results;
   }
 }
