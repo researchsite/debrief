@@ -11,6 +11,14 @@ interface ApiResponse {
   error?: string;
 }
 
+interface ClassifyResult {
+  kind: string;
+  title?: string;
+  speaker?: string;
+  ideas?: string[];
+  topics?: string[];
+}
+
 export default function AddTalkPage() {
   const [pageState, setPageState] = useState<PageState>('form');
 
@@ -22,6 +30,10 @@ export default function AddTalkPage() {
   const [imageMime, setImageMime] = useState<string>('image/jpeg');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
+  // Slide auto-fill state
+  const [classifying, setClassifying] = useState(false);
+  const [autoFilled, setAutoFilled] = useState(false);
+
   // Result
   const [ideas, setIdeas] = useState<string[]>([]);
   const [topics, setTopics] = useState<string[]>([]);
@@ -31,19 +43,42 @@ export default function AddTalkPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+
     setImageMime(file.type || 'image/jpeg');
+    setAutoFilled(false);
+
+    // Show preview immediately
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
-      // data URL format: data:<mime>;base64,<data>
       const base64 = dataUrl.split(',')[1] ?? '';
       setImageBase64(base64);
       setImagePreview(dataUrl);
     };
     reader.readAsDataURL(file);
+
+    // Auto-classify: extract title + speaker from the slide
+    setClassifying(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/import/classify', { method: 'POST', body: fd });
+      if (res.ok) {
+        const result = (await res.json()) as ClassifyResult;
+        if (result.kind === 'slide' || result.kind === 'deck') {
+          if (result.title?.trim() && !title.trim()) setTitle(result.title.trim());
+          if (result.speaker?.trim() && !speaker.trim()) setSpeaker(result.speaker.trim());
+          setAutoFilled(true);
+        }
+      }
+    } catch {
+      // silent — user can type manually
+    } finally {
+      setClassifying(false);
+    }
   }
 
   async function handleSubmit() {
@@ -168,16 +203,54 @@ export default function AddTalkPage() {
     <div className="px-4 py-6 space-y-4 max-w-[420px] mx-auto">
       <h1 className="text-xl font-bold tracking-tight">Add Talk</h1>
 
+      {/* Slide photo — first, so classification can pre-fill title/speaker */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">
+          Slide photo{' '}
+          <span className="text-muted-foreground font-normal">
+            (optional — auto-fills title &amp; speaker)
+          </span>
+        </label>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleImageChange}
+          className="w-full text-sm text-muted-foreground file:mr-3 file:py-1 file:px-3 file:rounded-md file:border file:border-border file:text-sm file:font-medium file:bg-background file:text-foreground hover:file:bg-muted cursor-pointer"
+        />
+        {imagePreview && (
+          <div className="rounded-xl overflow-hidden border border-border bg-muted">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imagePreview}
+              alt="Slide preview"
+              className="w-full max-h-48 object-contain"
+            />
+          </div>
+        )}
+      </div>
+
       {/* Talk title */}
       <div className="space-y-1">
-        <label className="text-sm font-medium" htmlFor="talk-title">
-          Talk title <span className="text-destructive">*</span>
-        </label>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium" htmlFor="talk-title">
+            Talk title <span className="text-destructive">*</span>
+          </label>
+          {autoFilled && (
+            <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs font-medium">
+              auto-filled from slide
+            </span>
+          )}
+          {classifying && (
+            <span className="text-xs text-muted-foreground animate-pulse">Scanning slide&hellip;</span>
+          )}
+        </div>
         <input
           id="talk-title"
           type="text"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => { setTitle(e.target.value); setAutoFilled(false); }}
           className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
           placeholder="e.g. Building Payment Systems at Scale"
         />
@@ -211,31 +284,6 @@ export default function AddTalkPage() {
           className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring resize-none"
           placeholder="Key ideas, quotes, follow-up questions&hellip;"
         />
-      </div>
-
-      {/* Optional slide photo */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">
-          Slide photo <span className="text-muted-foreground font-normal">(optional)</span>
-        </label>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleImageChange}
-          className="w-full text-sm text-muted-foreground file:mr-3 file:py-1 file:px-3 file:rounded-md file:border file:border-border file:text-sm file:font-medium file:bg-background file:text-foreground hover:file:bg-muted cursor-pointer"
-        />
-        {imagePreview && (
-          <div className="rounded-xl overflow-hidden border border-border bg-muted">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={imagePreview}
-              alt="Slide preview"
-              className="w-full max-h-48 object-contain"
-            />
-          </div>
-        )}
       </div>
 
       {error && (
