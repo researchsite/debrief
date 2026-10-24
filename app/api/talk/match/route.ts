@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { classifyImage } from '@/lib/classify';
 import { getSessions, type StoredSession } from '@/lib/graph-writes';
+import { formatImportText } from '@/lib/import-text';
 
 interface RequestBody {
   imageBase64: string;
@@ -60,7 +61,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if ('title' in classified && classified.title) textParts.push(classified.title);
     if ('topics' in classified && Array.isArray(classified.topics)) textParts.push(...classified.topics);
     if ('ideas' in classified && Array.isArray(classified.ideas)) textParts.push(...classified.ideas);
-    if ('text' in classified && classified.text) textParts.push(classified.text);
+    if ('text' in classified && classified.text) {
+      const text = formatImportText(classified.text);
+      if (text) textParts.push(text);
+    }
     slideKeywords = tokenize(textParts.join(' '));
   } catch {
     // If classify fails, fall back to showing all sessions unsorted

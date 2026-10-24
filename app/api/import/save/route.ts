@@ -3,6 +3,7 @@ import type { ClassificationResult } from '@/lib/classify';
 import { writeCoupon, writeAsset } from '@/lib/graph-writes';
 import { query } from '@/lib/graph';
 import { fetchProfiles } from '@/lib/brightdata';
+import { formatImportText } from '@/lib/import-text';
 
 interface SaveRequest {
   result: ClassificationResult;
@@ -124,7 +125,7 @@ export async function POST(request: NextRequest) {
         await writeAsset({
           kind: 'other',
           filePath,
-          extractedText: (result as { text?: string }).text ?? '',
+          extractedText: formatImportText(result.text),
         });
         break;
       }
