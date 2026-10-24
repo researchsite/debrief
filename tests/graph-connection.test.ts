@@ -10,6 +10,9 @@ vi.mock('falkordb', () => ({ FalkorDB: { connect: mocks.connect } }));
 beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
+  vi.stubEnv('FALKORDB_SSL', 'false');
+  vi.stubEnv('FALKORDB_USERNAME', '');
+  vi.stubEnv('FALKORDB_PASSWORD', '');
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -34,6 +37,22 @@ describe('database connection configuration', () => {
     vi.stubEnv('FALKORDB_PORT', '6380');
     const { getGraph } = await import('../lib/graph');
     await getGraph('debrief');
-    expect(mocks.connect).toHaveBeenCalledWith({ socket: { host: 'localhost', port: 6380 } });
+    expect(mocks.connect).toHaveBeenCalledWith({ socket: { host: 'localhost', port: 6380, tls: false } });
+  });
+
+  it('supports TLS and authentication with host and port configuration', async () => {
+    vi.stubEnv('FALKORDB_URL', '');
+    vi.stubEnv('FALKORDB_HOST', 'graph.example.com');
+    vi.stubEnv('FALKORDB_PORT', '6380');
+    vi.stubEnv('FALKORDB_SSL', 'true');
+    vi.stubEnv('FALKORDB_USERNAME', 'demo');
+    vi.stubEnv('FALKORDB_PASSWORD', 'example');
+    const { getGraph } = await import('../lib/graph');
+    await getGraph('debrief');
+    expect(mocks.connect).toHaveBeenCalledWith({
+      socket: { host: 'graph.example.com', port: 6380, tls: true },
+      username: 'demo',
+      password: 'example',
+    });
   });
 });
