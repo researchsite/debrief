@@ -15,6 +15,8 @@ interface Props {
   headline: string;
   city: string;
   company: string;
+  email?: string;
+  phone?: string;
   notes: Note[];
   hasContext: boolean;
   contextSummary: string | null;
@@ -36,9 +38,13 @@ function timeAgo(ms: number): string {
 
 export default function PersonPageClient({
   encodedUrl,
+  linkedinUrl,
   name,
   headline,
   city,
+  company,
+  email,
+  phone,
   notes,
   hasContext: initialHasContext,
   contextSummary: initialSummary,
@@ -72,12 +78,12 @@ export default function PersonPageClient({
 
   // Poll every 5s if context is missing
   useEffect(() => {
-    if (hasContext) return;
+    if (hasContext || !linkedinUrl) return;
     const id = setInterval(() => {
       void pollContext();
     }, 5000);
     return () => clearInterval(id);
-  }, [hasContext, pollContext]);
+  }, [hasContext, pollContext, linkedinUrl]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -85,7 +91,7 @@ export default function PersonPageClient({
       await fetch('/api/research', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personUrl: atob(encodedUrl), force: true }),
+        body: JSON.stringify({ personUrl: linkedinUrl, force: true }),
       });
       // Poll immediately after triggering refresh
       await pollContext();
@@ -103,6 +109,9 @@ export default function PersonPageClient({
       <div>
         <h1 className="text-xl font-bold tracking-tight">{name}</h1>
         <p className="text-sm text-muted-foreground">{headline}</p>
+        {company && <p className="text-sm text-muted-foreground">{company}</p>}
+        {email && <p className="text-sm">{email}</p>}
+        {phone && <p className="text-sm">{phone}</p>}
         <p className="text-xs text-muted-foreground">{city}</p>
       </div>
 
@@ -132,10 +141,9 @@ export default function PersonPageClient({
         </h2>
 
         {!hasContext ? (
-          <div className="rounded-xl border border-blue-200 p-4 bg-blue-50 animate-pulse space-y-2">
-            <div className="h-3 w-2/3 rounded bg-blue-200" />
-            <div className="h-3 w-1/2 rounded bg-blue-200" />
-            <p className="text-xs text-blue-600 pt-1">Researching…</p>
+          <div className="rounded-xl border border-blue-200 p-4 bg-blue-50 space-y-2">
+            <p className="text-xs text-blue-600 pt-1">No research saved yet.</p>
+            {linkedinUrl && <button type="button" disabled={refreshing} className="text-sm underline" onClick={() => void handleRefresh()}>{refreshing ? 'Researching…' : 'Research this person'}</button>}
           </div>
         ) : (
           <div className="rounded-xl border border-blue-200 p-4 bg-blue-50 space-y-3">

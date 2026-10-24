@@ -2,6 +2,7 @@ import { fetchPage, fetchProfiles, serpSearch } from './brightdata';
 import { jsonCompletion } from './openai';
 import { query, roQuery } from './graph';
 import { writeSession, writeMeetPlan, writePerson } from './graph-writes';
+import { eventPageMetadata } from './event-page-metadata';
 
 export interface ExtractedEvent {
   name: string;
@@ -145,6 +146,7 @@ export async function extractEventFromUrl(
 ): Promise<EventExtraction> {
   // Step 1: Fetch page HTML
   const html = await fetchPage(eventUrl);
+  const metadata = eventPageMetadata(html);
 
   // Step 2: Strip HTML
   const strippedHtml = stripHtml(html);
@@ -154,13 +156,24 @@ export async function extractEventFromUrl(
     {
       role: 'system',
       content:
-        'Extract event data from this HTML. Return JSON matching exactly: {event:{name,date,venue}, sessions:[{title,starts,ends,room,abstract,speakers:[{name,title,company,linkedin_url}]}]}. Use empty string for missing fields. Return valid JSON only.',
+        'Extract the event and its actual timed agenda from this page. Return JSON matching exactly: {event:{name,date,venue}, sessions:[{title,starts,ends,room,abstract,speakers:[{name,title,company,linkedin_url}]}]}. Only include explicitly scheduled agenda activities, in chronological order. Prize tracks, project ideas, and sponsor descriptions are not scheduled sessions. Never invent times or speakers. Use HH:mm in the event local timezone for times and YYYY-MM-DD for the date. Use empty strings for missing fields and an empty sessions array when there is no agenda. Return valid JSON only.',
     },
     {
       role: 'user',
-      content: strippedHtml,
+      content: `Verified page metadata: ${JSON.stringify(metadata)}\n\n${strippedHtml}`,
     },
   ]);
+
+  if (!extraction.event || !Array.isArray(extraction.sessions)) {
+    throw new Error('The page did not contain a valid event and agenda.');
+  }
+  Object.assign(extraction.event, metadata);
+  if (!extraction.event.name?.trim()) {
+    throw new Error('Could not identify an event on the fetched page. No event was imported.');
+  }
+  for (const session of extraction.sessions) {
+    if (session.ends === session.starts) session.ends = '';
+  }
 
   // Step 4: Resolve missing LinkedIn URLs via SERP search
   const allSpeakers = extraction.sessions.flatMap((s) => s.speakers);
@@ -207,6 +220,12 @@ export async function extractEventFromUrl(
       eventUrl,
       venue: extraction.event.venue,
     },
+    graphName,
+  );
+
+  await query(
+    'MATCH (me:Me), (e:Event {name: $name}) MERGE (me)-[:ATTENDED]->(e)',
+    { name: extraction.event.name },
     graphName,
   );
 

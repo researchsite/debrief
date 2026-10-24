@@ -12,18 +12,18 @@ async function PersonData({ paramsPromise }: { paramsPromise: Promise<{ url: str
 
   let linkedinUrl: string;
   try {
-    linkedinUrl = Buffer.from(url, 'base64').toString('utf-8');
+    linkedinUrl = Buffer.from(decodeURIComponent(url), 'base64').toString('utf-8');
   } catch {
     return <div className="px-4 py-6">Invalid person URL.</div>;
   }
 
   const result = await roQuery(
-    `MATCH (p:Person {linkedin_url: $url})
+    `MATCH (p:Person) WHERE p.linkedin_url = $url OR p.id = $url
      OPTIONAL MATCH (p)-[:HAS_NOTE]->(n:Note)
      OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
      OPTIONAL MATCH (p)-[:HAS_CONTEXT]->(ctx:Context)
      OPTIONAL MATCH (ctx)-[:CITES]->(src:Source)
-     RETURN p.name AS name, p.headline AS headline, p.city AS city,
+     RETURN p.name AS name, p.headline AS headline, p.city AS city, p.linkedin_url AS linkedinUrl, p.email AS email, p.phone AS phone,
             collect(DISTINCT {text: n.text, created_at: n.created_at}) AS notes,
             c.name AS company,
             ctx.summary AS contextSummary,
@@ -65,12 +65,14 @@ async function PersonData({ paramsPromise }: { paramsPromise: Promise<{ url: str
 
   return (
     <PersonPageClient
-      encodedUrl={url}
-      linkedinUrl={linkedinUrl}
+      encodedUrl={Buffer.from(linkedinUrl).toString('base64url')}
+      linkedinUrl={String(row.linkedinUrl ?? '')}
       name={String(row.name ?? '')}
       headline={String(row.headline ?? '')}
       city={String(row.city ?? '')}
       company={String(row.company ?? '')}
+      email={String(row.email ?? '')}
+      phone={String(row.phone ?? '')}
       notes={notes}
       hasContext={hasContext}
       contextSummary={hasContext ? String(row.contextSummary) : null}

@@ -8,10 +8,10 @@ Built for the [Patch the Conference Hackathon](https://www.wemakedevs.org/hackat
 
 ## What it does
 
-- **Add a person** — paste a LinkedIn URL (or scan their QR code); Bright Data fills the profile; common-ground badges appear instantly (shared company, school, topics); auto-research writes a separate AI context card that never touches your note.
+- **Add a person** — paste a LinkedIn URL, scan a QR code, or upload a QR image; imported profiles are used first, with Bright Data as a fallback; common-ground badges appear instantly (shared company, school, topics); auto-research writes a separate AI context card that never touches your note.
 - **Import an event** — paste any event URL; the app fetches sessions and speakers, scores who to meet based on your goals, and writes a ranked Meet plan with suggested openers.
 - **Import your connections** — upload LinkedIn's `Connections.csv`; every first-degree connection becomes a graph node; warm-intro paths appear in the Meet plan.
-- **Import anything** — drop a slide photo, coupon screenshot, or business card; OpenAI classifies and extracts it; coupons land in the Wallet.
+- **Import anything** — drop a slide photo, coupon screenshot, or business card; real QR decoding finds every unique code in an image, and each code gets its own review card. Linked profiles/pages and vCard/MECARD contacts are previewed before saving; coupons land in the Wallet. QR contacts do not count as meetings.
 - **Import transcripts** — upload a Zoom `.vtt` file; conversations split on 90-second gaps; review screen before anything is saved.
 - **Add a talk note** — title + speaker + note or slide photo; OpenAI extracts ideas and topics.
 - **Today timeline** — all captures newest first; floating `+` button for Add Person / Add Talk.
@@ -97,6 +97,7 @@ Go to http://localhost:3001/setup and:
 | `BRIGHTDATA_MOCK` | Return fixture data instead of calling Bright Data | `true` |
 | `FALKORDB_HOST` | FalkorDB host | `localhost` |
 | `FALKORDB_PORT` | FalkorDB port | `6379` |
+| `FALKORDB_URL` | Full connection URL; takes precedence over host/port. `falkors://` enables TLS. Store in `.env` or `.env.local`. | — |
 | `FALKORDB_GRAPH` | Graph name for production data | `debrief` |
 | `NEXT_PUBLIC_APP_URL` | Full URL for internal fetch calls | `http://localhost:3001` |
 
@@ -122,6 +123,48 @@ npm run build      # Production build check
 ```
 
 Tests use the `debrief_test` graph and never touch the production `debrief` graph.
+
+### Real LinkedIn archive run
+
+With the app running on port 3001 and `FALKORDB_URL` saved in `.env`:
+
+```bash
+node scripts/test-linkedin-e2e.mjs "/path/to/linkedin-export.zip" "https://www.linkedin.com/in/your-profile"
+```
+
+This separate script imports your real data into `debrief` through Chromium. It
+sets up your profile with General Networking as the goal, imports Profile,
+Positions, Education, Skills, and Connections, compares the graph with the CSVs,
+repeats the imports to check for duplicates, and checks the relationship graph,
+person page, and Today page. Other archive files are not imported. Aggregate
+results and screenshots are saved under the ignored `_private/linkedin-e2e/`
+directory.
+
+---
+
+## QR import and meeting capture
+
+- Each decoded QR can be edited, saved, dismissed, or retried independently. Up to three linked destinations are read at once, with a 20-second deadline per destination.
+- QR decoding uses local ZXing WASM and Sharp, not AI or a CDN. The ordinary image extraction is retained alongside decoded codes when it contains useful information.
+- Saving a contact from Import does not record a meeting. Use **Add Person** to record a real conversation; its submission ID makes retries safe and its manual fallback preserves your real URL, note, and hiring setting.
+- Meeting notes stay in your graph. Optional background research uses public profile/company information, independently of the meeting save.
+- Raw, unsupported, or inaccessible QR contents remain reviewable and saveable. Source images and individual payloads are linked in the graph without overwriting other QR results.
+
+Generate decoder fixtures with `node scripts/generate-qr-fixtures.mjs`. Run browser coverage with `npx playwright test e2e/qr-import.spec.ts e2e/add-person-reliability.spec.ts e2e/import-review.spec.ts --workers=1`.
+
+The optional live integration check creates and deletes its own isolated test graph:
+
+```bash
+RUN_LIVE_GRAPH_TESTS=true node --env-file=.env node_modules/vitest/vitest.mjs run tests/qr-graph-live.test.ts
+```
+
+The following separate verification **records a real meeting in debrief**. Repeating it with the same URL and note reuses its submission ID:
+
+```bash
+node scripts/verify-person-capture.mjs "https://www.linkedin.com/in/contact" "Your conversation note"
+```
+
+Results and screenshots are saved in the ignored `_private/person-capture-verification/` directory.
 
 ---
 

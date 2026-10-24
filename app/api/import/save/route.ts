@@ -1,22 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { ClassificationResult } from '@/lib/classify';
+import { ClassificationResultError, normalizeClassificationResult } from '@/lib/classification-result';
 import { writeCoupon, writeAsset } from '@/lib/graph-writes';
 import { query } from '@/lib/graph';
-import { fetchProfiles } from '@/lib/brightdata';
+import { upsertContactProfile } from '@/lib/person-profile';
+import { qrRecordId, saveQrProvenance } from '@/lib/qr-save';
+import type { QrProvenance } from '@/lib/import-types';
 
 interface SaveRequest {
-  result: ClassificationResult;
+  result: unknown;
   filePath: string;
   eventName?: string;
+  qr?: QrProvenance;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as SaveRequest;
-    const { result, filePath, eventName } = body;
+    const { filePath, eventName, qr } = body;
+    if (typeof filePath !== 'string' || !filePath.startsWith('/uploads/') || filePath.includes('..')) return NextResponse.json({ error: 'A valid uploaded image is required.' }, { status: 400 });
+    if (qr && (typeof qr.payload !== 'string' || !qr.payload || qr.payload.length > 32768 || (qr.url !== undefined && typeof qr.url !== 'string') || (qr.resolvedUrl !== undefined && typeof qr.resolvedUrl !== 'string'))) return NextResponse.json({ error: 'A valid QR payload is required.' }, { status: 400 });
+    const result = normalizeClassificationResult(body.result);
+    const assetPath = qr ? `${filePath}#qr=${qrRecordId(filePath, qr.payload)}` : filePath;
+    let personId: string | undefined;
 
     switch (result.kind) {
       case 'coupon': {
+        if (!result.code.trim()) return NextResponse.json({ error: 'Enter the coupon code before saving.' }, { status: 400 });
         await writeCoupon({
           code: result.code,
           vendor: result.vendor,
@@ -25,7 +34,7 @@ export async function POST(request: NextRequest) {
           expires: result.expires,
           terms: result.terms,
           redeemUrl: result.redeem_url,
-          assetPath: filePath,
+          assetPath,
           eventName,
         });
         break;
@@ -35,7 +44,7 @@ export async function POST(request: NextRequest) {
       case 'deck': {
         await writeAsset({
           kind: result.kind,
-          filePath,
+          filePath: assetPath,
           extractedText: result.title,
         });
 
@@ -82,27 +91,22 @@ export async function POST(request: NextRequest) {
       case 'business_card': {
         await writeAsset({
           kind: result.kind,
-          filePath,
+          filePath: assetPath,
           extractedText: result.name,
         });
 
-        if (result.linkedin_url) {
-          // Fire and forget profile fetch
-          fetchProfiles([result.linkedin_url]).catch(console.error);
-        } else if (result.name) {
-          // Write a basic Person node
-          await query(
-            `MERGE (p:Person {name: $name}) SET p.company = $company, p.job_title = $title`,
-            { name: result.name, company: result.company ?? '', title: result.title ?? '' },
-          );
-        }
+        personId = await upsertContactProfile({
+          id: result.id || `contact:${qrRecordId('contact', qr?.payload || result.email || result.phone || JSON.stringify(result))}`,
+          linkedin_url: result.linkedin_url, name: result.name, headline: result.title, city: '',
+          current_company: result.company, past_companies: [], schools: [], skills: [], email: result.email, phone: result.phone,
+        });
         break;
       }
 
       case 'agenda': {
         await writeAsset({
           kind: 'agenda',
-          filePath,
+          filePath: assetPath,
           extractedText: (result.sessions ?? []).map((s) => s.title).join(', '),
         });
 
@@ -122,20 +126,21 @@ export async function POST(request: NextRequest) {
 
       default: {
         await writeAsset({
-          kind: 'other',
-          filePath,
+          kind: result.kind === 'qr' ? 'qr' : 'other',
+          filePath: assetPath,
           extractedText: (result as { text?: string }).text ?? '',
         });
         break;
       }
     }
 
-    return NextResponse.json({ ok: true });
+    if (qr) await saveQrProvenance(filePath, qr, result, personId);
+    return NextResponse.json({ ok: true, personId });
   } catch (err) {
     console.error('[save] error:', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Save failed' },
-      { status: 500 },
+      { status: err instanceof ClassificationResultError ? 400 : 500 },
     );
   }
 }

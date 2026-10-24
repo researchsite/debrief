@@ -7,22 +7,19 @@ export type QueryResult = GraphReply<Record<string, unknown>>;
 
 const host = process.env.FALKORDB_HOST ?? 'localhost';
 const port = parseInt(process.env.FALKORDB_PORT ?? '6379', 10);
-const username = process.env.FALKORDB_USERNAME;
-const password = process.env.FALKORDB_PASSWORD;
-const ssl = process.env.FALKORDB_SSL === 'true';
 
-// Cache only the DB connection, never the Graph handle.
+// Cache only the DB connection — never cache the Graph handle.
 // The Graph object tracks server schema version; caching it causes
-// "ERR invalid graph version" when the graph is modified externally.
+// "ERR invalid graph version" when the graph is modified externally
+// (e.g. by seed scripts running in a separate process).
 let dbClient: FalkorDB | null = null;
 
 async function getDb(): Promise<FalkorDB> {
   if (!dbClient) {
-    dbClient = await FalkorDB.connect({
-      socket: { host, port, tls: ssl },
-      ...(username && { username }),
-      ...(password && { password }),
-    });
+    const url = process.env.FALKORDB_URL;
+    dbClient = await FalkorDB.connect(
+      url ? { url } : { socket: { host, port } },
+    );
   }
   return dbClient;
 }

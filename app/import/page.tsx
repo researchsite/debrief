@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { readJsonResponse } from '@/lib/http-json';
+import type { ImportPreviewItem, QrProvenance } from '@/lib/import-types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,9 +10,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import type { ClassificationResult } from '@/lib/classify';
+import { normalizeClassificationResult } from '@/lib/classification-result';
 import Link from 'next/link';
 
 interface FileResult {
+  id: string;
+  qr?: QrProvenance;
+  resolving?: boolean;
+  resolveError?: string;
+  saving?: boolean;
+  saveError?: string;
+  personKey?: string;
+  warning?: string;
   file: File;
   filePath?: string;
   result?: ClassificationResult;
@@ -31,6 +42,49 @@ export default function ImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const qrQueue = useRef<{ id: string; payload: string }[]>([]);
+  const qrRequests = useRef(new Map<string, AbortController>());
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    const requests = qrRequests.current;
+    return () => { alive.current = false; qrQueue.current = []; requests.forEach((controller) => controller.abort()); };
+  }, []);
+
+  function drainQrQueue() {
+    if (!alive.current) return;
+    while (qrRequests.current.size < 3 && qrQueue.current.length) {
+      const job = qrQueue.current.shift()!;
+      const controller = new AbortController();
+      qrRequests.current.set(job.id, controller);
+      void (async () => {
+        try {
+          const response = await fetch('/api/import/resolve-qr', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payload: job.payload }),
+            signal: AbortSignal.any([controller.signal, AbortSignal.timeout(25000)]),
+          });
+          const { item } = await readJsonResponse<{ item: ImportPreviewItem }>(response, 'Could not read linked details');
+          const result = normalizeClassificationResult(item.result);
+          if (alive.current) setFileResults((prev) => prev.map((row) => row.id === job.id ? { ...row, result, editedResult: result, qr: item.qr ?? row.qr, resolving: false, resolveError: item.error } : row));
+        } catch {
+          if (alive.current) setFileResults((prev) => prev.map((row) => row.id === job.id ? { ...row, resolving: false, resolveError: 'Could not read linked details. Retry, or save the decoded QR contents.' } : row));
+        } finally {
+          qrRequests.current.delete(job.id);
+          drainQrQueue();
+        }
+      })();
+    }
+  }
+  function enqueueQr(row: FileResult) {
+    if (!row.qr || qrRequests.current.has(row.id) || qrQueue.current.some((job) => job.id === row.id)) return;
+    setFileResults((prev) => prev.map((item) => item.id === row.id ? { ...item, resolving: true, resolveError: undefined } : item));
+    qrQueue.current.push({ id: row.id, payload: row.qr.payload });
+    drainQrQueue();
+  }
+  function clearImports() {
+    qrQueue.current = []; qrRequests.current.forEach((controller) => controller.abort());
+    setPageState('upload'); setFiles([]); setFileResults([]);
+  }
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -65,21 +119,26 @@ export default function ImportPage() {
           method: 'POST',
           body: formData,
         });
-        const data = await resp.json() as ClassificationResult & { _filePath?: string };
-        const { _filePath, ...result } = data as ClassificationResult & { _filePath?: string };
-        results.push({ file, result: result as ClassificationResult, filePath: _filePath, editedResult: result as ClassificationResult });
+        const data = await readJsonResponse<{ items?: ImportPreviewItem[]; _filePath?: string; warning?: string }>(resp, 'Could not analyze this file');
+        const items: ImportPreviewItem[] = Array.isArray(data.items) ? data.items : [{ id: crypto.randomUUID(), source: 'image', result: normalizeClassificationResult(data) }];
+        for (const [index, item] of items.entries()) {
+          const result = normalizeClassificationResult(item.result);
+          results.push({ id: crypto.randomUUID(), file, result, editedResult: result, filePath: data._filePath, qr: item.qr, warning: index === 0 ? data.warning : undefined });
+        }
       } catch (err) {
-        results.push({ file, error: err instanceof Error ? err.message : 'Classification failed' });
+        results.push({ id: crypto.randomUUID(), file, error: err instanceof Error ? err.message : 'Classification failed' });
       }
     }
 
     setFileResults(results);
     setPageState('review');
+    for (const row of results) if (row.qr) enqueueQr(row);
   };
 
-  const handleSave = async (idx: number) => {
-    const fr = fileResults[idx];
-    if (!fr.result) return;
+  const handleSave = async (id: string) => {
+    const fr = fileResults.find((row) => row.id === id);
+    if (!fr?.result || fr.saving || fr.resolving) return;
+    setFileResults((prev) => prev.map((row) => row.id === id ? { ...row, saving: true, saveError: undefined } : row));
 
     const resultToSave = fr.editedResult ?? fr.result;
 
@@ -87,51 +146,27 @@ export default function ImportPage() {
       const resp = await fetch('/api/import/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ result: resultToSave, filePath: fr.filePath }),
+        body: JSON.stringify({ result: resultToSave, filePath: fr.filePath, qr: fr.qr }),
+        signal: AbortSignal.timeout(45000),
       });
-      const data = await resp.json() as { ok?: boolean; error?: string };
-      if (data.ok) {
-        const msg =
-          resultToSave.kind === 'coupon'
-            ? 'Saved to Wallet!'
-            : resultToSave.kind === 'badge' || resultToSave.kind === 'business_card'
-              ? `${(resultToSave as { name: string }).name} added`
-              : 'Saved!';
-        setFileResults((prev) =>
-          prev.map((r, i) => (i === idx ? { ...r, saved: true, savedMessage: msg } : r)),
-        );
-      } else {
-        setFileResults((prev) =>
-          prev.map((r, i) => (i === idx ? { ...r, error: data.error ?? 'Save failed' } : r)),
-        );
-      }
-    } catch (err) {
-      setFileResults((prev) =>
-        prev.map((r, i) =>
-          i === idx ? { ...r, error: err instanceof Error ? err.message : 'Save failed' } : r,
-        ),
-      );
+      const data = await readJsonResponse<{ ok: boolean; personId?: string }>(resp, 'Could not save this item');
+      const message = resultToSave.kind === 'coupon' ? 'Saved to Wallet!' : resultToSave.kind === 'badge' || resultToSave.kind === 'business_card' ? `${resultToSave.name} added` : 'Saved!';
+      setFileResults((prev) => prev.map((row) => row.id === id ? { ...row, saved: true, saving: false, savedMessage: message, personKey: data.personId } : row));
+    } catch (error) {
+      setFileResults((prev) => prev.map((row) => row.id === id ? { ...row, saving: false, saveError: error instanceof Error ? error.message : 'Save failed. Please retry.' } : row));
     }
   };
 
-  const handleDismiss = (idx: number) => {
-    setFileResults((prev) => prev.filter((_, i) => i !== idx));
+  const handleDismiss = (id: string) => {
+    qrQueue.current = qrQueue.current.filter((job) => job.id !== id);
+    qrRequests.current.get(id)?.abort();
+    setFileResults((prev) => prev.filter((row) => row.id !== id));
   };
-
-  const updateEditedField = (idx: number, field: string, value: unknown) => {
-    setFileResults((prev) =>
-      prev.map((r, i) =>
-        i === idx
-          ? { ...r, editedResult: { ...(r.editedResult ?? r.result!), [field]: value } }
-          : r,
-      ),
-    );
+  const updateEditedField = (id: string, field: string, value: unknown) => {
+    setFileResults((prev) => prev.map((row) => row.id === id ? { ...row, editedResult: { ...(row.editedResult ?? row.result!), [field]: value } } : row));
   };
-
-  const toggleEdit = (idx: number) => {
-    setFileResults((prev) =>
-      prev.map((r, i) => (i === idx ? { ...r, editing: !r.editing } : r)),
-    );
+  const toggleEdit = (id: string) => {
+    setFileResults((prev) => prev.map((row) => row.id === id ? { ...row, editing: !row.editing } : row));
   };
 
   // Upload state
@@ -247,21 +282,26 @@ export default function ImportPage() {
     <div className="flex flex-col px-4 pt-6 pb-4 gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Review &amp; Save</h1>
-        <Button variant="outline" size="sm" onClick={() => { setPageState('upload'); setFiles([]); setFileResults([]); }}>
+        <Button variant="outline" size="sm" onClick={clearImports}>
           Import more
         </Button>
       </div>
 
-      {fileResults.map((fr, idx) => (
-        <ReviewCard
-          key={idx}
-          fr={fr}
-          idx={idx}
-          onSave={() => handleSave(idx)}
-          onDismiss={() => handleDismiss(idx)}
-          onToggleEdit={() => toggleEdit(idx)}
-          onUpdateField={(field, value) => updateEditedField(idx, field, value)}
-        />
+      {fileResults.map((fr) => (
+        <div key={fr.id} data-import-item={fr.id} className="space-y-2">
+          {fr.warning && <p role="status" className="text-sm text-muted-foreground">{fr.warning}</p>}
+          {fr.qr && !fr.saved && <div className="rounded-lg border p-3 space-y-2 text-sm">
+            <p className="font-medium">QR code · {fr.file.name}</p>
+            <p className="break-all whitespace-pre-wrap">{fr.qr.payload}</p>
+            {fr.resolving && <p role="status">Reading linked details…</p>}
+            {fr.resolveError && <><p className="text-muted-foreground">{fr.resolveError}</p><Button variant="outline" size="sm" onClick={() => enqueueQr(fr)}>Retry linked details</Button></>}
+          </div>}
+          {fr.saveError && <p role="alert" className="text-sm text-destructive">{fr.saveError}</p>}
+          <fieldset disabled={fr.resolving || fr.saving} className="min-w-0 border-0 p-0">
+            <ReviewCard fr={fr} onSave={() => handleSave(fr.id)} onDismiss={() => handleDismiss(fr.id)} onToggleEdit={() => toggleEdit(fr.id)} onUpdateField={(field, value) => updateEditedField(fr.id, field, value)} />
+          </fieldset>
+          {fr.qr && !fr.saved && <Button variant="ghost" size="sm" onClick={() => handleDismiss(fr.id)}>Dismiss QR</Button>}
+        </div>
       ))}
 
       {fileResults.length === 0 && (
@@ -275,7 +315,6 @@ export default function ImportPage() {
 
 interface ReviewCardProps {
   fr: FileResult;
-  idx: number;
   onSave: () => void;
   onDismiss: () => void;
   onToggleEdit: () => void;
@@ -288,6 +327,7 @@ function ReviewCard({ fr, onSave, onDismiss, onToggleEdit, onUpdateField }: Revi
       <Card className="border-green-500/40 bg-green-500/5">
         <CardContent className="pt-4 pb-4">
           <p className="text-green-600 font-medium text-sm">✓ {fr.savedMessage}</p>
+          {fr.personKey && <Link href={`/person/${encodeURIComponent(btoa(fr.personKey))}`} className="text-sm underline">View contact →</Link>}
           {fr.savedMessage?.includes('Wallet') && (
             <Link href="/wallet" className="text-xs text-primary underline mt-1 block">
               View in Wallet →
@@ -465,12 +505,15 @@ function ReviewCard({ fr, onSave, onDismiss, onToggleEdit, onUpdateField }: Revi
                   <Label className="text-xs">LinkedIn URL</Label>
                   <Input value={result.linkedin_url} onChange={(e) => onUpdateField('linkedin_url', e.target.value)} className="mt-1" />
                 </div>
+                <div><Label className="text-xs">Email</Label><Input aria-label="Email" value={result.email} onChange={(e) => onUpdateField('email', e.target.value)} /></div>
+                <div><Label className="text-xs">Phone</Label><Input aria-label="Phone" value={result.phone ?? ''} onChange={(e) => onUpdateField('phone', e.target.value)} /></div>
               </>
             ) : (
               <>
                 <p className="font-semibold text-lg">{result.name}</p>
                 <p className="text-sm text-muted-foreground">{result.title} @ {result.company}</p>
                 {result.email && <p className="text-sm">{result.email}</p>}
+                {result.phone && <p className="text-sm">{result.phone}</p>}
                 {result.linkedin_url && (
                   <p className="text-xs text-primary truncate">{result.linkedin_url}</p>
                 )}
@@ -507,7 +550,8 @@ function ReviewCard({ fr, onSave, onDismiss, onToggleEdit, onUpdateField }: Revi
             <CardTitle className="text-base">📄 {other.kind === 'qr' ? 'QR Code' : 'Other'}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            {other.text && <p className="text-sm text-muted-foreground">{other.text}</p>}
+            {isEditing && fr.qr ? <Textarea aria-label="QR details" value={other.text ?? ''} onChange={(event) => onUpdateField('text', event.target.value)} /> : other.text && <p className="text-sm text-muted-foreground whitespace-pre-wrap break-all">{other.text}</p>}
+            {fr.qr && <><Button variant="ghost" onClick={onToggleEdit}>{isEditing ? 'Done' : 'Edit'}</Button><Button onClick={onSave}>Save QR details</Button></>}
             <Button variant="outline" className="w-full" onClick={onDismiss}>Dismiss</Button>
           </CardContent>
         </Card>
