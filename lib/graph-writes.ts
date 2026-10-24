@@ -466,13 +466,14 @@ export interface CouponInput {
 
 export async function writeCoupon(input: CouponInput, graphName?: string): Promise<void> {
   const { code, vendor, value, description, expires, terms, redeemUrl, assetPath, eventName } = input;
+  const now = Date.now();
 
   await query(
     `MERGE (coupon:Coupon {code: $code})
      SET coupon.vendor = $vendor, coupon.value = $value, coupon.description = $description,
          coupon.expires = $expires, coupon.terms = $terms, coupon.redeem_url = $redeemUrl,
-         coupon.used = false`,
-    { code, vendor, value, description, expires: expires ?? null, terms, redeemUrl },
+         coupon.used = false, coupon.created_at = $now`,
+    { code, vendor, value, description, expires: expires ?? null, terms, redeemUrl, now },
     graphName,
   );
 
@@ -703,6 +704,198 @@ export async function writeConversation(input: ConversationSaveInput, graphName?
       );
     }
   }
+}
+
+// ────────────────────────────────────────────────────────────
+// Talk Notes graph writes + Today timeline reads
+// ────────────────────────────────────────────────────────────
+
+export interface TalkNoteInput {
+  sessionTitle: string;
+  speakerName: string;
+  noteText: string;
+  ideas: string[];       // extracted by OpenAI
+  topics: string[];      // extracted by OpenAI, normalized lowercase
+  eventName?: string;    // link to current event if known
+  imageBase64?: string;  // optional slide photo (not stored in graph, only passed to OpenAI)
+}
+
+export async function writeTalkNote(input: TalkNoteInput, graphName?: string): Promise<void> {
+  const { sessionTitle, speakerName, noteText, ideas, topics, eventName } = input;
+  const timestamp = Date.now();
+
+  // 1. MERGE Session node
+  await query(
+    'MERGE (s:Session {title: $title}) SET s.at = $timestamp, s.note = $note',
+    { title: sessionTitle, timestamp, note: noteText },
+    graphName,
+  );
+
+  // 2. If eventName: link Session to Event
+  if (eventName) {
+    await query(
+      `MATCH (e:Event {name: $eventName})
+       MATCH (s:Session {title: $title})
+       MERGE (s)-[:PART_OF]->(e)`,
+      { eventName, title: sessionTitle },
+      graphName,
+    );
+  }
+
+  // 3. MERGE speaker Person node
+  await query(
+    'MERGE (speaker:Person {name: $name})',
+    { name: speakerName },
+    graphName,
+  );
+
+  // 4. MERGE speaker SPEAKS_AT session
+  await query(
+    `MATCH (speaker:Person {name: $name})
+     MATCH (s:Session {title: $title})
+     MERGE (speaker)-[:SPEAKS_AT]->(s)`,
+    { name: speakerName, title: sessionTitle },
+    graphName,
+  );
+
+  // 5. MATCH Me -> SAW session
+  await query(
+    `MATCH (me:Me)
+     MATCH (s:Session {title: $title})
+     MERGE (me)-[:SAW]->(s)`,
+    { title: sessionTitle },
+    graphName,
+  );
+
+  // 6. For each idea: MERGE Idea + SPARKED edge
+  for (const idea of ideas) {
+    await query(
+      `MATCH (s:Session {title: $title})
+       MERGE (i:Idea {text: $idea})
+       MERGE (s)-[:SPARKED]->(i)`,
+      { title: sessionTitle, idea },
+      graphName,
+    );
+  }
+
+  // 7. For each topic: MERGE Topic + ABOUT edges (session and ideas)
+  for (const topic of topics) {
+    const normalized = topic.toLowerCase();
+    await query(
+      `MATCH (s:Session {title: $title})
+       MERGE (t:Topic {name: $topic})
+       MERGE (s)-[:ABOUT]->(t)`,
+      { title: sessionTitle, topic: normalized },
+      graphName,
+    );
+
+    // Also link each idea to the topic
+    for (const idea of ideas) {
+      await query(
+        `MATCH (i:Idea {text: $idea})
+         MERGE (t:Topic {name: $topic})
+         MERGE (i)-[:ABOUT]->(t)`,
+        { idea, topic: normalized },
+        graphName,
+      );
+    }
+  }
+}
+
+export interface TimelineEntry {
+  type: 'person' | 'talk' | 'coupon';
+  timestamp: number;
+  title: string;
+  subtitle: string;
+  url?: string;   // link to /person/[url] or /wallet
+  details?: string;
+}
+
+export async function getTodayTimeline(graphName?: string): Promise<TimelineEntry[]> {
+  // Start of today in epoch ms (midnight UTC)
+  const now = new Date();
+  const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+
+  const entries: TimelineEntry[] = [];
+
+  // 1. People MET today
+  const metResult = await roQuery(
+    `MATCH (me:Me)-[r:MET]->(p:Person)
+     OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
+     WHERE r.at > $todayStart
+     RETURN p.name AS name, c.name AS company, r.at AS at, p.linkedin_url AS url`,
+    { todayStart },
+    graphName,
+  );
+  for (const row of (metResult.data ?? []) as Record<string, unknown>[]) {
+    entries.push({
+      type: 'person',
+      timestamp: Number(row.at ?? 0),
+      title: String(row.name ?? 'Unknown'),
+      subtitle: row.company ? String(row.company) : '',
+      url: row.url ? `/person/${Buffer.from(String(row.url)).toString('base64url')}` : undefined,
+    });
+  }
+
+  // 2. Sessions SAW today
+  const sawResult = await roQuery(
+    `MATCH (me:Me)-[:SAW]->(s:Session)
+     WHERE s.at > $todayStart
+     OPTIONAL MATCH (s)-[:SPARKED]->(i:Idea)
+     RETURN s.title AS title, count(i) AS ideaCount, s.at AS at`,
+    { todayStart },
+    graphName,
+  );
+  for (const row of (sawResult.data ?? []) as Record<string, unknown>[]) {
+    const ideaCount = Number(row.ideaCount ?? 0);
+    entries.push({
+      type: 'talk',
+      timestamp: Number(row.at ?? 0),
+      title: String(row.title ?? 'Unknown Talk'),
+      subtitle: ideaCount === 1 ? '1 idea' : `${ideaCount} ideas`,
+    });
+  }
+
+  // 3. Coupons created today
+  const couponResult = await roQuery(
+    `MATCH (c:Coupon)
+     WHERE c.created_at > $todayStart
+     RETURN c.code AS code, c.vendor AS vendor, c.created_at AS at`,
+    { todayStart },
+    graphName,
+  );
+  for (const row of (couponResult.data ?? []) as Record<string, unknown>[]) {
+    entries.push({
+      type: 'coupon',
+      timestamp: Number(row.at ?? 0),
+      title: String(row.code ?? 'Coupon'),
+      subtitle: String(row.vendor ?? ''),
+      url: '/wallet',
+    });
+  }
+
+  // Sort newest first
+  entries.sort((a, b) => b.timestamp - a.timestamp);
+
+  return entries;
+}
+
+export async function getEventSummary(graphName?: string): Promise<{ eventName: string; primaryIntent: string } | null> {
+  const result = await roQuery(
+    `MATCH (me:Me)-[:ATTENDED]->(e:Event)
+     MATCH (me)-[r:HAS_INTENT]->(i:Intent) WHERE r.primary = true
+     RETURN e.name AS eventName, i.name AS primaryIntent LIMIT 1`,
+    {},
+    graphName,
+  );
+
+  const row = result.data?.[0];
+  if (!row || row.eventName == null) return null;
+
+  return {
+    eventName: String(row.eventName),
+    primaryIntent: String(row.primaryIntent ?? ''),
+  };
 }
 
 export async function writeLinkedInArchive(
