@@ -19,7 +19,13 @@ export async function POST(): Promise<NextResponse<FollowUpResponse>> {
     const primaryIntent = event?.primaryIntent ?? 'networking';
 
     const people = await getRecapPeopleForIntent(primaryIntent, 'debrief');
-    const top5 = people.slice(0, 5);
+    // Notes, companies, and meeting edges can produce several rows per contact.
+    const seen = new Set<string>();
+    const top5 = people.filter((person) => {
+      if (!person.linkedinUrl || seen.has(person.linkedinUrl)) return false;
+      seen.add(person.linkedinUrl);
+      return true;
+    }).slice(0, 5);
 
     const drafts: FollowUpDraft[] = [];
 
