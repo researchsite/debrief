@@ -22,6 +22,17 @@ interface ExtractedSession {
   speakers: ExtractedSpeaker[];
 }
 
+interface StoredSession {
+  title: string;
+  starts: string;
+  ends: string;
+  room: string;
+  abstract: string;
+  speakerNames: string[];
+}
+
+type AgendaSession = ExtractedSession | StoredSession;
+
 interface ExtractedEvent {
   name: string;
   date: string;
@@ -30,7 +41,7 @@ interface ExtractedEvent {
 
 interface EventExtraction {
   event: ExtractedEvent;
-  sessions: ExtractedSession[];
+  sessions: AgendaSession[];
 }
 
 interface MeetPlanEntry {
@@ -86,8 +97,12 @@ function ReasonBadges({ reasons }: { reasons: string[] }) {
   );
 }
 
-function SessionCard({ session }: { session: ExtractedSession }) {
+function SessionCard({ session }: { session: AgendaSession }) {
   const [open, setOpen] = useState(false);
+  const speakers = 'speakers' in session
+    ? session.speakers
+    : session.speakerNames.map((name) => ({ name, title: '', company: '', linkedin_url: '' }));
+
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
       <button
@@ -104,9 +119,9 @@ function SessionCard({ session }: { session: ExtractedSession }) {
           {session.starts}{session.ends ? ` – ${session.ends}` : ''}
           {session.room ? ` · ${session.room}` : ''}
         </p>
-        {session.speakers.length > 0 && (
+        {speakers.length > 0 && (
           <p className="text-xs text-muted-foreground">
-            {session.speakers.map((s) => `${s.name}${s.company ? `, ${s.company}` : ''}`).join(' · ')}
+            {speakers.map((s) => `${s.name}${s.company ? `, ${s.company}` : ''}`).join(' · ')}
           </p>
         )}
       </button>
@@ -120,8 +135,8 @@ function SessionCard({ session }: { session: ExtractedSession }) {
 }
 
 // Group sessions by start time
-function groupByTime(sessions: ExtractedSession[]): Map<string, ExtractedSession[]> {
-  const map = new Map<string, ExtractedSession[]>();
+function groupByTime(sessions: AgendaSession[]): Map<string, AgendaSession[]> {
+  const map = new Map<string, AgendaSession[]>();
   for (const s of sessions) {
     const key = s.starts || 'Unscheduled';
     if (!map.has(key)) map.set(key, []);
@@ -152,7 +167,7 @@ export default function EventPage() {
       .then((data: {
         ok: boolean;
         event?: { name: string; date: string; venue: string; url: string };
-        sessions?: ExtractedSession[];
+        sessions?: StoredSession[];
         meetPlan?: MeetPlanEntry[];
       }) => {
         if (!data.ok) return;
