@@ -339,11 +339,14 @@ export default function SetupPage() {
             const selected = selectedIntents.has(value);
             const isPrimary = primaryIntent === value;
             return (
-              <button
+              <div
                 key={value}
-                type="button"
+                role="checkbox"
+                aria-checked={selected}
+                tabIndex={0}
                 onClick={() => toggleIntent(value)}
-                className={`relative flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors text-sm ${
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleIntent(value)}
+                className={`relative flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors text-sm cursor-pointer select-none ${
                   selected
                     ? 'border-primary bg-primary/10 text-foreground'
                     : 'border-border bg-background text-muted-foreground hover:bg-muted'
@@ -363,7 +366,7 @@ export default function SetupPage() {
                     ⭐
                   </button>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
