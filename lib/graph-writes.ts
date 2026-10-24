@@ -577,6 +577,134 @@ export async function markCouponUsed(code: string, graphName?: string): Promise<
   );
 }
 
+// ────────────────────────────────────────────────────────────
+// Transcript + Conversation graph writes
+// ────────────────────────────────────────────────────────────
+
+export interface TranscriptInput {
+  filename: string;
+  recordedAt: string;  // ISO date
+  rawText: string;
+}
+
+export async function writeTranscript(input: TranscriptInput, graphName?: string): Promise<string> {
+  const { filename, recordedAt, rawText } = input;
+  await query(
+    'MERGE (t:Transcript {filename: $filename}) SET t.recorded_at = $recordedAt, t.raw_text = $rawText',
+    { filename, recordedAt, rawText },
+    graphName,
+  );
+  return filename;
+}
+
+export interface ConversationSaveInput {
+  transcriptFilename: string;
+  personUrl: string;       // confirmed Person linkedin_url (may be a placeholder if new)
+  personName: string;
+  starts: number;
+  ends: number;
+  summary: string;
+  keyPoints: string[];
+  topics: string[];
+  promises: string[];
+  followUpNeeded: boolean;
+}
+
+export async function writeConversation(input: ConversationSaveInput, graphName?: string): Promise<void> {
+  const {
+    transcriptFilename,
+    personUrl,
+    personName,
+    starts,
+    ends,
+    summary,
+    keyPoints,
+    topics,
+    promises,
+    followUpNeeded,
+  } = input;
+
+  const timestamp = Date.now();
+  const noteText = [summary, ...keyPoints].join('\n');
+
+  // 1. MERGE Conversation node
+  await query(
+    `MERGE (conv:Conversation {starts: $starts, ends: $ends})
+     SET conv.summary = $summary, conv.excerpt = left($summary, 100)`,
+    { starts, ends, summary },
+    graphName,
+  );
+
+  // 2. Link Transcript -> Conversation
+  await query(
+    `MATCH (t:Transcript {filename: $filename})
+     MATCH (conv:Conversation {starts: $starts, ends: $ends})
+     MERGE (t)-[:CONTAINS]->(conv)`,
+    { filename: transcriptFilename, starts, ends },
+    graphName,
+  );
+
+  // 3. MET edge from Me to Person
+  await query(
+    `MATCH (me:Me) MERGE (me)-[:MET {at: $starts}]->(p:Person {linkedin_url: $personUrl})`,
+    { starts, personUrl },
+    graphName,
+  );
+
+  // Also ensure person has a name set
+  await query(
+    `MERGE (p:Person {linkedin_url: $personUrl}) SET p.name = coalesce(p.name, $personName)`,
+    { personUrl, personName },
+    graphName,
+  );
+
+  // 4. Link Conversation -> Person
+  await query(
+    `MATCH (conv:Conversation {starts: $starts, ends: $ends})
+     MATCH (p:Person {linkedin_url: $personUrl})
+     MERGE (conv)-[:WITH]->(p)`,
+    { starts, ends, personUrl },
+    graphName,
+  );
+
+  // 5. Create Note from summary + key_points
+  await query(
+    `MATCH (conv:Conversation {starts: $starts, ends: $ends})
+     MATCH (p:Person {linkedin_url: $personUrl})
+     CREATE (n:Note {text: $noteText, created_at: $timestamp})
+     MERGE (conv)-[:PRODUCED]->(n)
+     MERGE (p)-[:HAS_NOTE]->(n)`,
+    { starts, ends, personUrl, noteText, timestamp },
+    graphName,
+  );
+
+  // 6. Topics
+  for (const topic of topics) {
+    await query(
+      `MATCH (conv:Conversation {starts: $starts, ends: $ends})
+       MERGE (tp:Topic {name: $topic})
+       MERGE (conv)-[:MENTIONS]->(tp)`,
+      { starts, ends, topic },
+      graphName,
+    );
+  }
+
+  // 7. FollowUp nodes for each promise
+  if (followUpNeeded) {
+    for (const promise of promises) {
+      await query(
+        `MATCH (me:Me)
+         MATCH (p:Person {linkedin_url: $personUrl})
+         MERGE (fu:FollowUp {message: $promise, status: 'todo'})
+         MERGE (me)-[:FOLLOW_UP]->(fu)
+         MERGE (fu)-[:FOR]->(p)`,
+        { personUrl, promise },
+        graphName,
+      );
+    }
+  }
+}
+
 export async function writeLinkedInArchive(
   linkedinUrl: string,
   archive: LinkedInArchive,

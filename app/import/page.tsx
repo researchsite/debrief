@@ -145,6 +145,18 @@ export default function ImportPage() {
           </p>
         </div>
 
+        {/* Transcript import card */}
+        <Link href="/import/transcript">
+          <div className="border rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-muted/40 transition-colors cursor-pointer">
+            <div className="text-2xl">🎙</div>
+            <div className="flex-1">
+              <p className="font-medium text-sm">Import Transcript</p>
+              <p className="text-xs text-muted-foreground">Upload a .vtt file from Zoom to extract conversations</p>
+            </div>
+            <span className="text-muted-foreground text-sm">→</span>
+          </div>
+        </Link>
+
         {/* Drop zone */}
         <div
           className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center gap-3 transition-colors ${
