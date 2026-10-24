@@ -104,9 +104,9 @@ function SessionCard({ session }: { session: ExtractedSession }) {
           {session.starts}{session.ends ? ` – ${session.ends}` : ''}
           {session.room ? ` · ${session.room}` : ''}
         </p>
-        {session.speakers.length > 0 && (
+        {(session.speakers ?? []).length > 0 && (
           <p className="text-xs text-muted-foreground">
-            {session.speakers.map((s) => `${s.name}${s.company ? `, ${s.company}` : ''}`).join(' · ')}
+            {(session.speakers ?? []).map((s) => `${s.name}${s.company ? `, ${s.company}` : ''}`).join(' · ')}
           </p>
         )}
       </button>
@@ -159,7 +159,13 @@ export default function EventPage() {
         if (data.event?.name) {
           setExtraction({
             event: { name: data.event.name, date: data.event.date, venue: data.event.venue },
-            sessions: data.sessions ?? [],
+            sessions: (data.sessions ?? []).map((s) => ({
+              ...s,
+              // Graph returns speakerNames string[]; convert to ExtractedSpeaker[]
+              speakers: s.speakers ?? (s as unknown as { speakerNames?: string[] }).speakerNames?.map(
+                (name) => ({ name, title: '', company: '', linkedin_url: '' })
+              ) ?? [],
+            })),
           });
           setStoredEventUrl(data.event.url ?? '');
         }
