@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { parseLinkedInCsv } from '../../lib/linkedin-csv';
 
 const INTENTS = [
   { value: 'job_hunt', label: 'Job Hunting', emoji: '💼' },
@@ -59,7 +60,13 @@ export default function SetupPage() {
   const [importError, setImportError] = useState('');
   const [importing, setImporting] = useState(false);
 
-  // Section 5
+  // Section 5: Connections import
+  const connectionsRef = useRef<HTMLInputElement>(null);
+  const [connectionsImporting, setConnectionsImporting] = useState(false);
+  const [connectionsImported, setConnectionsImported] = useState<number | null>(null);
+  const [connectionsError, setConnectionsError] = useState('');
+
+  // Section 6
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
@@ -150,6 +157,50 @@ export default function SetupPage() {
       setImportError(err instanceof Error ? err.message : 'Import failed');
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function handleConnectionsImport() {
+    setConnectionsError('');
+    setConnectionsImported(null);
+
+    const file = connectionsRef.current?.files?.[0];
+    if (!file) {
+      setConnectionsError('Please select a Connections.csv file.');
+      return;
+    }
+
+    setConnectionsImporting(true);
+    try {
+      const text = await file.text();
+      const rows = parseLinkedInCsv<Record<string, string>>(text, 'First Name');
+
+      if (rows.length === 0) {
+        setConnectionsError('No rows found in the CSV. Make sure you uploaded the correct file.');
+        return;
+      }
+
+      const BATCH_SIZE = 500;
+      let totalImported = 0;
+
+      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        const batch = rows.slice(i, i + BATCH_SIZE);
+        const res = await fetch('/api/connections', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: batch }),
+        });
+        const data = (await res.json()) as { ok?: boolean; imported?: number; error?: string };
+        if (!res.ok) {
+          throw new Error(data.error ?? 'Import failed');
+        }
+        totalImported += data.imported ?? 0;
+        setConnectionsImported(totalImported);
+      }
+    } catch (err) {
+      setConnectionsError(err instanceof Error ? err.message : 'Import failed');
+    } finally {
+      setConnectionsImporting(false);
     }
   }
 
@@ -386,7 +437,53 @@ export default function SetupPage() {
         </button>
       </section>
 
-      {/* Section 5: Save */}
+      {/* Section 5: Import your connections */}
+      <section className="space-y-3 rounded-xl border border-border p-4 bg-card">
+        <h2 className="text-base font-semibold">Import your connections</h2>
+        <p className="text-xs text-muted-foreground">
+          Upload Connections.csv from your LinkedIn export. From LinkedIn: Settings &rarr; Data
+          privacy &rarr; Get a copy of your data &rarr; Request Connections-only archive.
+        </p>
+
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">Connections.csv</label>
+          <input
+            ref={connectionsRef}
+            type="file"
+            accept=".csv"
+            className="w-full text-sm file:mr-2 file:rounded file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs"
+          />
+        </div>
+
+        {connectionsError && (
+          <p className="text-xs text-destructive">{connectionsError}</p>
+        )}
+
+        {connectionsImporting && (
+          <div className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
+            {connectionsImported !== null
+              ? `Importing… ${connectionsImported} so far`
+              : 'Importing…'}
+          </div>
+        )}
+
+        {!connectionsImporting && connectionsImported !== null && (
+          <div className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
+            Imported {connectionsImported} connections
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={handleConnectionsImport}
+          disabled={connectionsImporting}
+          className="w-full rounded-lg bg-secondary text-secondary-foreground px-4 py-2 text-sm font-medium hover:bg-secondary/80 disabled:opacity-50 transition-colors"
+        >
+          {connectionsImporting ? 'Importing…' : 'Import'}
+        </button>
+      </section>
+
+      {/* Section 6: Save */}
       <section className="pb-4">
         {saveError && (
           <p className="mb-2 text-sm text-destructive">{saveError}</p>
