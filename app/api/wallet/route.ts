@@ -7,6 +7,6 @@ export async function GET() {
     return NextResponse.json({ coupons });
   } catch (err) {
     console.error('[wallet] error:', err);
-    return NextResponse.json({ coupons: [] });
+    return NextResponse.json({ error: 'Wallet unavailable' }, { status: 503 });
   }
 }
