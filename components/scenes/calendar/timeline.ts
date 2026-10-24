@@ -32,7 +32,7 @@ function dayStart(ts: number): number {
 }
 
 /** Groups entries into Today, Tomorrow, then any later dates. Today and Tomorrow always appear. */
-export function groupByDay(entries: TimelineEntry[], now = Date.now()): DaySection[] {
+export function groupByDay(entries: TimelineEntry[], now: number): DaySection[] {
   const today = dayStart(now);
   const tomorrow = dayStart(today + 36 * 3600 * 1000);
   const later = new Map<number, TimelineEntry[]>();
@@ -56,7 +56,7 @@ export function groupByDay(entries: TimelineEntry[], now = Date.now()): DaySecti
   ];
 }
 
-export function relativeTime(ts: number, now = Date.now()): string {
+export function relativeTime(ts: number, now: number): string {
   const diff = now - ts;
   if (diff < 0) {
     return new Date(ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });

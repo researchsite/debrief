@@ -38,6 +38,7 @@ export default function TodayPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const [attempt, setAttempt] = useState(0);
+  const [loadedAt, setLoadedAt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +47,7 @@ export default function TodayPage() {
         if (cancelled) return;
         setTimeline(dedupeEntries(data.timeline ?? []));
         setEvent(data.event ?? null);
+        setLoadedAt(Date.now());
         setState('ready');
       })
       .catch(() => {
@@ -61,7 +63,7 @@ export default function TodayPage() {
     setAttempt((n) => n + 1);
   }, []);
 
-  const sections = useMemo(() => groupByDay(timeline), [timeline]);
+  const sections = useMemo(() => groupByDay(timeline, loadedAt), [timeline, loadedAt]);
 
   return (
     <div className={styles.stage}>
@@ -69,7 +71,7 @@ export default function TodayPage() {
 
       <div className={styles.foreground}>
         <div className={styles.boardArea}>
-          <Billboard state={state} event={event} sections={sections} onRetry={retry} />
+          <Billboard state={state} event={event} sections={sections} now={loadedAt} onRetry={retry} />
         </div>
         <div className={styles.ground}>
           <div className={styles.postShadow} aria-hidden />

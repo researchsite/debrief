@@ -9,6 +9,8 @@ interface BillboardProps {
   state: BoardState;
   event: { eventName: string; primaryIntent: string } | null;
   sections: DaySection[];
+  /** Time the data was loaded; relative times are computed against it. */
+  now: number;
   onRetry: () => void;
 }
 
@@ -18,7 +20,7 @@ const ICONS: Record<TimelineEntry['type'], string> = {
   coupon: '🎟️',
 };
 
-export function Billboard({ state, event, sections, onRetry }: BillboardProps) {
+export function Billboard({ state, event, sections, now, onRetry }: BillboardProps) {
   const isEmpty = state === 'ready' && sections.every((s) => s.entries.length === 0);
 
   return (
@@ -70,7 +72,7 @@ export function Billboard({ state, event, sections, onRetry }: BillboardProps) {
                   <ul className={styles.rows}>
                     {section.entries.map((entry) => (
                       <li key={entryKey(entry)}>
-                        <BoardRow entry={entry} />
+                        <BoardRow entry={entry} now={now} />
                       </li>
                     ))}
                   </ul>
@@ -83,7 +85,7 @@ export function Billboard({ state, event, sections, onRetry }: BillboardProps) {
   );
 }
 
-function BoardRow({ entry }: { entry: TimelineEntry }) {
+function BoardRow({ entry, now }: { entry: TimelineEntry; now: number }) {
   const content = (
     <>
       <span className={styles.rowIcon} aria-hidden="true">
@@ -93,7 +95,7 @@ function BoardRow({ entry }: { entry: TimelineEntry }) {
         <span className={`${styles.rowTitle} font-pixel`}>{entry.title}</span>
         {entry.subtitle && <span className={`${styles.rowSub} font-pixel-body`}>{entry.subtitle}</span>}
       </span>
-      <span className={`${styles.rowTime} font-pixel-body`}>{relativeTime(entry.timestamp)}</span>
+      <span className={`${styles.rowTime} font-pixel-body`}>{relativeTime(entry.timestamp, now)}</span>
     </>
   );
 
