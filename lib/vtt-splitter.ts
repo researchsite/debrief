@@ -12,7 +12,7 @@ function buildChunk(cues: VttCue[]): ConversationChunk {
     starts: cues[0].start,
     ends: cues[cues.length - 1].end,
     cues,
-    text: cues.map((c) => c.text).join('\n'),
+    text: cues.map((c) => c.speaker ? `${c.speaker}: ${c.text}` : c.text).join('\n'),
   };
 }
 

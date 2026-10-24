@@ -7,21 +7,18 @@ export interface VttCue {
 }
 
 function parseTimestamp(ts: string): number {
-  // ts like "00:03:05.000"
-  const [h, m, rest] = ts.split(':');
-  const [s, ms] = rest.split('.');
-  return parseInt(h) * 3600 + parseInt(m) * 60 + parseInt(s) + parseInt(ms) / 1000;
+  return ts.split(':').reduce((seconds, part) => seconds * 60 + Number(part), 0);
 }
 
 export function parseVtt(vttText: string): VttCue[] {
   // Normalize line endings
-  const normalized = vttText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const normalized = vttText.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
   // Split on double newline to get raw cue blocks
-  const blocks = normalized.split(/\n\n+/);
+  const blocks = normalized.split(/\n[\t ]*\n+/);
 
   const cues: VttCue[] = [];
-  const timingPattern = /^(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})/;
+  const timingPattern = /^((?:\d{2,}:)?[0-5]\d:[0-5]\d\.\d{3})\s+-->\s+((?:\d{2,}:)?[0-5]\d:[0-5]\d\.\d{3})(?:\s|$)/;
 
   for (const block of blocks) {
     const lines = block.trim().split('\n');
@@ -29,13 +26,13 @@ export function parseVtt(vttText: string): VttCue[] {
 
     // Skip WEBVTT header or empty blocks
     const firstLine = lines[0].trim();
-    if (firstLine === 'WEBVTT' || firstLine === '') continue;
+    if (/^(?:WEBVTT|NOTE|STYLE|REGION)(?:\s|$)/.test(firstLine) || firstLine === '') continue;
 
     let lineIdx = 0;
     let cueId = '';
 
-    // If first line is a cue number (all digits), use it as ID and advance
-    if (/^\d+$/.test(firstLine)) {
+    // Cue identifiers can be names or numbers.
+    if (!timingPattern.test(firstLine)) {
       cueId = firstLine;
       lineIdx = 1;
     }
@@ -49,15 +46,20 @@ export function parseVtt(vttText: string): VttCue[] {
 
     const start = parseTimestamp(timingMatch[1]);
     const end = parseTimestamp(timingMatch[2]);
+    if (end <= start) continue;
     lineIdx++;
 
     // Remaining lines are the text
-    const textLines = lines.slice(lineIdx).map((l) => l.trim()).filter((l) => l !== '');
+    const rawText = lines.slice(lineIdx).join('\n');
+    const voiceMatch = /<v(?:\.[^\s>]+)*\s+([^>]+)>/i.exec(rawText);
+    const textLines = rawText.replace(/<[^>]*>/g, '')
+      .replace(/&(amp|lt|gt|nbsp|lrm|rlm);/g, (_, entity: string) => ({ amp: '&', lt: '<', gt: '>', nbsp: ' ', lrm: '', rlm: '' })[entity] ?? '')
+      .split('\n').map((l) => l.trim()).filter(Boolean);
     if (textLines.length === 0) continue;
 
     // Check if first text line matches "Speaker Name:" pattern
-    let speaker: string | undefined;
-    const speakerMatch = /^([A-Z][a-zA-Z\s]+):\s*(.*)$/.exec(textLines[0]);
+    let speaker: string | undefined = voiceMatch?.[1].trim();
+    const speakerMatch = /^([\p{L}\p{N}][\p{L}\p{N}\s.'’_-]{0,79}):\s*(.*)$/u.exec(textLines[0]);
     let finalText: string;
 
     if (speakerMatch) {
