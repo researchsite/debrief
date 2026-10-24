@@ -7,7 +7,6 @@
  *   node scripts/seed-events.mjs --graph debrief_test   (different graph)
  */
 
-import { createClient } from '@redis/client';
 import { FalkorDB } from 'falkordb';
 import fs from 'fs';
 import path from 'path';
@@ -25,7 +24,6 @@ const GRAPH = graphArg >= 0 ? args[graphArg + 1] : 'debrief';
 const cyan = (s) => `\x1b[36m${s}\x1b[0m`;
 const green = (s) => `\x1b[32m${s}\x1b[0m`;
 const yellow = (s) => `\x1b[33m${s}\x1b[0m`;
-const red = (s) => `\x1b[31m${s}\x1b[0m`;
 
 // ─── connect ─────────────────────────────────────────────────────────────────
 
