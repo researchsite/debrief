@@ -388,9 +388,9 @@ function Turntable({ count }: { count: number }) {
 const HUB_TOP = DISK_Y + 0.29;
 const ZOOM_RIDGES = Array.from({ length: 28 }, (_, i) => (i / 28) * Math.PI * 2);
 const LENS_X = 0.18;
-/** Projector is turned a little toward the camera so its lens and zoom ring read clearly. */
-const PROJ_YAW = -0.55;
-const PROJ_SCALE = 0.82;
+/** Projector faces the screen straight on. */
+const PROJ_YAW = 0;
+const PROJ_SCALE = 1;
 
 /** Lens position and aim given the screen center. */
 function useProjectorPose(layout: Layout) {
@@ -901,14 +901,14 @@ function CameraRig({ layout }: { layout: Layout }) {
     const aspect = size.width / Math.max(1, size.height);
     if (layout.portrait) {
       cam.fov = 64;
-      cam.position.set(1.1, 7.2, 9.8);
+      cam.position.set(0, 7.2, 9.8);
       cam.lookAt(0, 2.6, -3);
     } else {
       // Wider screens can afford to sit a little closer.
       const pull = aspect < 1.25 ? 1 + (1.25 - aspect) * 0.9 : 1;
       cam.fov = 42;
-      cam.position.set(2.2 * pull, 7.0 * pull, 12.2 * pull);
-      cam.lookAt(0.2, 1.95, -3);
+      cam.position.set(0, 7.6 * pull, 13.2 * pull);
+      cam.lookAt(0, 1.85, -3);
     }
     cam.updateProjectionMatrix();
   }, [get, size.width, size.height, layout.portrait]);
