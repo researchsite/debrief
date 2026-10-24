@@ -1,102 +1,55 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { fetchProfiles } from '@/lib/brightdata';
-import { jsonCompletion } from '@/lib/openai';
-import { writePerson, getCommonGround, type CommonGround } from '@/lib/graph-writes';
+import { after, NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'node:crypto';
+import { getCommonGround } from '@/lib/graph-writes';
+import { query } from '@/lib/graph';
+import { captureMeeting, normalizeLinkedInUrl, resolvePersonProfile, upsertContactProfile, type PersonProfile } from '@/lib/person-profile';
 
-interface RequestBody {
-  linkedinUrl: string;
-  note: string;
-  isHiring: boolean;
-}
-
-interface ResponseBody {
-  ok: boolean;
-  person?: { name: string; headline: string; city: string; linkedin_url: string };
-  commonGround?: CommonGround;
-  enrichmentFailed?: boolean;
-  error?: string;
-}
-
-export async function POST(req: NextRequest): Promise<NextResponse<ResponseBody>> {
-  let body: RequestBody;
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  let body;
+  try { body = await req.json(); } catch {
+    return NextResponse.json({ ok: false, error: 'Invalid request. Please retry.' }, { status: 400 });
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ ok: false, error: 'Invalid request. Please retry.' }, { status: 400 });
+  let url = '';
   try {
-    body = (await req.json()) as RequestBody;
+    if (body.linkedinUrl) url = normalizeLinkedInUrl(body.linkedinUrl);
+    if (!url && !body.manual) throw new Error('A LinkedIn URL is required.');
+    if (body.manual && (typeof body.manualName !== 'string' || !body.manualName.trim())) throw new Error('Name is required.');
   } catch {
-    return NextResponse.json({ ok: false, error: 'Invalid JSON body' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'Enter a valid LinkedIn profile URL, or a name when saving manually.' }, { status: 400 });
   }
-
-  if (!body.linkedinUrl) {
-    return NextResponse.json({ ok: false, error: 'linkedinUrl is required' }, { status: 400 });
-  }
-
-  const { linkedinUrl, note = '', isHiring = false } = body;
-
-  // 1. Fetch profile from Bright Data (mock in dev)
-  let profile: Awaited<ReturnType<typeof fetchProfiles>>[number];
+  const note = typeof body.note === 'string' ? body.note : '';
+  const requestId = typeof body.requestId === 'string' && body.requestId.length <= 200 ? body.requestId : randomUUID();
   try {
-    const profiles = await fetchProfiles([linkedinUrl]);
-    profile = profiles[0];
-    if (!profile) {
-      return NextResponse.json({ ok: true, enrichmentFailed: true });
+    let profile: PersonProfile | null;
+    if (body.manual) {
+      profile = { id: `contact:${requestId}`, linkedin_url: url, name: body.manualName.trim(), headline: '', city: '', current_company: typeof body.manualCompany === 'string' ? body.manualCompany.trim() : '', past_companies: [], schools: [], skills: [] };
+    } else {
+      try { profile = await resolvePersonProfile(url, AbortSignal.timeout(20_000)); }
+      catch { return NextResponse.json({ ok: true, enrichmentFailed: true }); }
+      if (!profile) return NextResponse.json({ ok: true, enrichmentFailed: true });
     }
-  } catch {
-    // Bright Data failure — return enrichmentFailed so UI can show manual fallback
-    return NextResponse.json({ ok: true, enrichmentFailed: true });
+    const id = await upsertContactProfile(profile);
+    await captureMeeting(id, requestId, note);
+    const warnings: string[] = [];
+    let commonGround;
+    try { commonGround = await getCommonGround(profile.linkedin_url || id); }
+    catch { warnings.push('Person saved. Common ground is temporarily unavailable.'); }
+    if (body.isHiring === true) {
+      try { await query(`MATCH (me:Me)-[:WANTS]->(role:Role), (p:Person {id:$id})-[:WORKS_AT]->(c:Company) MERGE (c)-[:HIRING]->(role)`, { id }); }
+      catch { warnings.push('Person saved. The hiring detail could not be updated.'); }
+    }
+    try {
+      after(async () => {
+        try {
+          const { researchPerson } = await import('@/lib/research');
+          if (profile.linkedin_url && profile.current_company) await researchPerson(profile.linkedin_url, profile.name, profile.current_company);
+        } catch { /* Research cannot turn a saved meeting into a failed request. */ }
+      });
+    } catch { warnings.push('Person saved. Research is temporarily unavailable.'); }
+    return NextResponse.json({ ok: true, person: { id, name: profile.name, headline: profile.headline, city: profile.city, linkedin_url: profile.linkedin_url }, commonGround, warnings });
+  } catch (error) {
+    console.error('[person] Meeting save failed:', error instanceof Error ? error.name : 'Unknown error');
+    return NextResponse.json({ ok: false, error: 'Could not save this person. Your details are still here. Please retry.' }, { status: 503 });
   }
-
-  // 2. Extract topics from headline + note via OpenAI
-  let topics: string[] = [];
-  try {
-    const result = await jsonCompletion<{ topics: string[] }>([
-      {
-        role: 'system',
-        content:
-          'Return JSON: {"topics": string[]} — extract 1-3 topic keywords (normalized lowercase, 1-3 words each) from this professional headline and conversation note.',
-      },
-      {
-        role: 'user',
-        content: `Headline: ${profile.headline}\nNote: ${note}`,
-      },
-    ]);
-    topics = (result.topics ?? []).map((t) => t.toLowerCase());
-  } catch {
-    // OpenAI not available or failed — default to empty
-    topics = [];
-  }
-
-  // 3. Write person to graph
-  await writePerson({
-    linkedinUrl,
-    name: profile.name,
-    headline: profile.headline,
-    city: profile.city,
-    currentCompany: profile.current_company,
-    pastCompanies: profile.past_companies ?? [],
-    schools: profile.schools ?? [],
-    skills: profile.skills ?? [],
-    topics,
-    noteText: note,
-    isHiring,
-  });
-
-  // 4. Get common ground
-  const commonGround = await getCommonGround(linkedinUrl);
-
-  // 5. Fire-and-forget research (non-blocking)
-  void fetch(`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3001'}/api/research`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ personUrl: linkedinUrl }),
-  }).catch(() => {});
-
-  return NextResponse.json({
-    ok: true,
-    person: {
-      name: profile.name,
-      headline: profile.headline,
-      city: profile.city,
-      linkedin_url: profile.linkedin_url,
-    },
-    commonGround,
-  });
 }

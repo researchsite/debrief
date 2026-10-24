@@ -1,5 +1,6 @@
 import { jsonCompletion } from './openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import { normalizeClassificationResult } from './classification-result';
 
 export type AssetKind = 'slide' | 'deck' | 'coupon' | 'badge' | 'business_card' | 'agenda' | 'qr' | 'other';
 
@@ -30,6 +31,8 @@ export interface ClassifiedBadge {
   title: string;
   email: string;
   linkedin_url: string;
+  id?: string;
+  phone?: string;
 }
 
 export interface ClassifiedAgenda {
@@ -75,10 +78,10 @@ Return only valid JSON.`,
     },
   ];
 
-  return jsonCompletion<ClassificationResult>(messages);
+  return normalizeClassificationResult(await jsonCompletion<unknown>(messages));
 }
 
-export async function classifyPdfText(text: string): Promise<ClassificationResult> {
+export async function classifyPdfText(text: string, options: { signal?: AbortSignal } = {}): Promise<ClassificationResult> {
   const messages: ChatCompletionMessageParam[] = [
     {
       role: 'system',
@@ -96,7 +99,7 @@ Return only valid JSON.`,
     },
   ];
 
-  return jsonCompletion<ClassificationResult>(messages);
+  return normalizeClassificationResult(await jsonCompletion<unknown>(messages, options));
 }
 
 export async function extractPdfText(buffer: Buffer): Promise<string> {

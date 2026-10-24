@@ -1,6 +1,9 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { readJsonResponse } from '@/lib/http-json';
+import { parseQrPayload } from '@/lib/qr-payload';
+import type { ImportPreviewItem } from '@/lib/import-types';
 import Link from 'next/link';
 import { Switch } from '@/components/ui/switch';
 
@@ -14,6 +17,7 @@ interface CommonGround {
 }
 
 interface PersonResult {
+  id?: string;
   name: string;
   headline: string;
   city: string;
@@ -25,6 +29,7 @@ interface ApiResponse {
   person?: PersonResult;
   commonGround?: CommonGround;
   enrichmentFailed?: boolean;
+  warnings?: string[];
   error?: string;
 }
 
@@ -59,6 +64,13 @@ export default function AddPersonPage() {
 
   // Error
   const [error, setError] = useState('');
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const requestIdRef = useRef<string | null>(null);
+  const submittingRef = useRef(false);
+  const qrFileRef = useRef<HTMLInputElement>(null);
+  const [qrCandidates, setQrCandidates] = useState<string[]>([]);
+  const [qrReading, setQrReading] = useState(false);
+  const mountedRef = useRef(true);
 
   const stopQr = useCallback(() => {
     if (rafRef.current !== null) {
@@ -72,48 +84,80 @@ export default function AddPersonPage() {
     setQrActive(false);
   }, []);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; stopQr(); };
+  }, [stopQr]);
+
   const startQr = useCallback(async () => {
     setQrMessage('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      if (!mountedRef.current) { stream.getTracks().forEach((track) => track.stop()); return; }
       streamRef.current = stream;
       setQrActive(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        // Start scanning frames
-        const scan = async () => {
-          if (!videoRef.current || !canvasRef.current) return;
-          const video = videoRef.current;
+    } catch { setQrMessage('Camera access is unavailable. You can upload a QR image instead.'); }
+  }, []);
+
+  useEffect(() => {
+    if (!qrActive || !videoRef.current) return;
+    let stopped = false;
+    const video = videoRef.current;
+    video.srcObject = streamRef.current;
+    async function begin() {
+      try {
+        await video.play();
+        const jsQR = (await import('jsqr')).default;
+        const scan = () => {
+          if (stopped) return;
           const canvas = canvasRef.current;
-          if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+          if (canvas && video.readyState >= 2) {
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
-            if (ctx) {
+            if (ctx && canvas.width && canvas.height) {
               ctx.drawImage(video, 0, 0);
-              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-              try {
-                const jsQR = (await import('jsqr')).default;
-                const code = jsQR(imageData.data, imageData.width, imageData.height);
-                if (code && code.data.includes('linkedin.com/in/')) {
-                  setLinkedinUrl(code.data);
-                  stopQr();
-                  return;
-                }
-              } catch {
-                // jsQR not available, ignore
+              const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              const code = jsQR(image.data, image.width, image.height);
+              if (code) {
+                const parsed = parseQrPayload(code.data);
+                if (parsed.kind === 'linkedin') { setLinkedinUrl(parsed.url); stopQr(); return; }
+                if (parsed.kind === 'contact' && parsed.contact.linkedin_url) { setLinkedinUrl(parsed.contact.linkedin_url); stopQr(); return; }
+                setQrMessage('This code is not a LinkedIn profile. Use Import to save its contents.');
               }
             }
           }
           rafRef.current = requestAnimationFrame(scan);
         };
-        rafRef.current = requestAnimationFrame(scan);
-      }
-    } catch {
-      setQrMessage('QR scan available on mobile — camera access denied or unavailable.');
+        if (!stopped) rafRef.current = requestAnimationFrame(scan);
+      } catch { if (!stopped) { setQrMessage('Could not start the camera. Upload a QR image instead.'); stopQr(); } }
     }
-  }, [stopQr]);
+    void begin();
+    return () => {
+      stopped = true;
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      video.srcObject = null;
+    };
+  }, [qrActive, stopQr]);
+
+  async function handleQrImage(file: File) {
+    setQrReading(true); setQrMessage(''); setQrCandidates([]); stopQr();
+    try {
+      const form = new FormData(); form.append('file', file); form.append('scanOnly', 'true');
+      const response = await fetch('/api/import/classify', { method: 'POST', body: form, signal: AbortSignal.timeout(30000) });
+      const data = await readJsonResponse<{ items: ImportPreviewItem[] }>(response, 'Could not scan this image');
+      if (!data.items?.length) { setQrMessage('No readable QR code found. Try a clearer photo.'); return; }
+      const candidates = [...new Set((data.items ?? []).flatMap((item) => {
+        if (!item.qr) return [];
+        const parsed = parseQrPayload(item.qr.payload);
+        return parsed.kind === 'linkedin' ? [parsed.url] : parsed.kind === 'contact' && parsed.contact.linkedin_url ? [parsed.contact.linkedin_url] : [];
+      }))];
+      if (candidates.length === 1) { setLinkedinUrl(candidates[0]); setQrMessage('LinkedIn profile found. Add your notes, then save.'); }
+      else if (candidates.length) { setQrCandidates(candidates); setQrMessage('Choose the person you met.'); }
+      else setQrMessage('No LinkedIn profile found. Use Import to review other QR contents.');
+    } catch (error) { setQrMessage(error instanceof Error ? error.message : 'Could not scan this image. Please retry.'); }
+    finally { setQrReading(false); if (qrFileRef.current) qrFileRef.current.value = ''; }
+  }
 
   async function handleSubmit() {
     setError('');
@@ -121,14 +165,18 @@ export default function AddPersonPage() {
       setError('Please enter a LinkedIn URL.');
       return;
     }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    requestIdRef.current ??= crypto.randomUUID();
     setPageState('loading');
     try {
       const res = await fetch('/api/person', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ linkedinUrl: linkedinUrl.trim(), note, isHiring }),
+        body: JSON.stringify({ linkedinUrl: linkedinUrl.trim(), note, isHiring, requestId: requestIdRef.current }),
+        signal: AbortSignal.timeout(45000),
       });
-      const data = (await res.json()) as ApiResponse;
+      const data = await readJsonResponse<ApiResponse>(res, 'Could not save this person');
       if (!res.ok) {
         setError(data.error ?? 'Something went wrong');
         setPageState('form');
@@ -142,15 +190,16 @@ export default function AddPersonPage() {
       if (data.person) {
         setPerson(data.person);
         setCommonGround(data.commonGround ?? null);
+        setWarnings(data.warnings ?? []);
         setPageState('result');
       } else {
         setError('Unexpected response from server');
         setPageState('form');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error');
+      setError(err instanceof Error && err.name !== 'TimeoutError' ? err.message : 'The request timed out. Your details are still here. Please retry.');
       setPageState('form');
-    }
+    } finally { submittingRef.current = false; }
   }
 
   async function handleManualSave() {
@@ -159,37 +208,44 @@ export default function AddPersonPage() {
       setManualError('Name is required.');
       return;
     }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    requestIdRef.current ??= crypto.randomUUID();
     setManualSaving(true);
     try {
-      // Build a synthetic LinkedIn URL from name for uniqueness
-      const syntheticUrl = `https://www.linkedin.com/in/manual-${manualName.trim().toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
       const res = await fetch('/api/person', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          linkedinUrl: syntheticUrl,
+          linkedinUrl: linkedinUrl.trim(),
+          requestId: requestIdRef.current,
           note: manualNote,
-          isHiring: false,
+          isHiring,
           manual: true,
           manualName: manualName.trim(),
           manualCompany: manualCompany.trim(),
         }),
+        signal: AbortSignal.timeout(45000),
       });
-      const data = (await res.json()) as ApiResponse;
+      const data = await readJsonResponse<ApiResponse>(res, 'Could not save this person');
       if (!res.ok) {
         setManualError(data.error ?? 'Save failed');
         return;
       }
-      // Reset to form for adding another
-      resetForm();
+      if (data.person) { setPerson(data.person); setCommonGround(data.commonGround ?? null); setWarnings(data.warnings ?? []); setPageState('result'); }
+      else throw new Error('Could not confirm the save. Please retry.');
     } catch (err) {
-      setManualError(err instanceof Error ? err.message : 'Save failed');
+      setManualError(err instanceof Error && err.name !== 'TimeoutError' ? err.message : 'The request timed out. Your details are still here. Please retry.');
     } finally {
       setManualSaving(false);
+      submittingRef.current = false;
     }
   }
 
   function resetForm() {
+    requestIdRef.current = null;
+    setWarnings([]);
+    setQrCandidates([]);
     setLinkedinUrl('');
     setNote('');
     setIsHiring(false);
@@ -229,13 +285,14 @@ export default function AddPersonPage() {
       <div className="px-4 py-6 space-y-4 max-w-[420px] mx-auto">
         <h1 className="text-xl font-bold tracking-tight">Person Added</h1>
 
+        {warnings.map((warning) => <p key={warning} className="text-sm text-muted-foreground">{warning}</p>)}
         {/* Person card */}
         <div className="rounded-xl border border-border p-4 bg-card space-y-1">
           <p className="font-semibold text-foreground">{person.name}</p>
           <p className="text-sm text-muted-foreground">{person.headline}</p>
           <p className="text-xs text-muted-foreground">{person.city}</p>
           <Link
-            href={`/person/${btoa(person.linkedin_url)}`}
+            href={`/person/${encodeURIComponent(btoa(unescape(encodeURIComponent(person.linkedin_url || person.id || ''))))}`}
             className="inline-block mt-2 text-sm text-primary underline hover:text-primary/80"
           >
             View full profile →
@@ -414,6 +471,9 @@ export default function AddPersonPage() {
         )}
       </div>
 
+      <input ref={qrFileRef} type="file" accept="image/*" aria-label="Upload QR image" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleQrImage(file); }} />
+      <button type="button" disabled={qrReading} className="text-sm underline" onClick={() => qrFileRef.current?.click()}>{qrReading ? 'Reading QR codes…' : 'Upload QR image'}</button>
+      {qrCandidates.map((candidate) => <button key={candidate} type="button" className="block text-sm underline" onClick={() => { setLinkedinUrl(candidate); setQrCandidates([]); setQrMessage('Profile selected.'); }}>{candidate}</button>)}
       {/* QR video + hidden canvas */}
       {qrActive && (
         <div className="rounded-xl overflow-hidden border border-border bg-black">

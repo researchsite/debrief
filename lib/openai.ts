@@ -15,8 +15,15 @@ let _client: OpenAI | null = null;
 
 function getClient(): OpenAI {
   if (!_client) {
+    const apiKey = process.env.OPENAI_API_KEY?.trim();
+    if (!apiKey) {
+      throw new JsonCompletionError(
+        'OPENAI_API_KEY is missing. Add it to .env.local and restart the dev server.',
+        null,
+      );
+    }
     _client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY ?? 'no-key',
+      apiKey,
     });
   }
   return _client;
@@ -24,6 +31,7 @@ function getClient(): OpenAI {
 
 export async function jsonCompletion<T>(
   messages: ChatCompletionMessageParam[],
+  options: { signal?: AbortSignal } = {},
 ): Promise<T> {
   const client = getClient();
   let rawContent: string | null = null;
@@ -34,7 +42,7 @@ export async function jsonCompletion<T>(
         messages,
         response_format: { type: 'json_object' },
       },
-      { signal: AbortSignal.timeout(20000) },
+      { signal: options.signal ?? AbortSignal.timeout(20000) },
     );
 
     rawContent = response.choices[0]?.message?.content ?? null;

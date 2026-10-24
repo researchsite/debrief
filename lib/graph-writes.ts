@@ -91,7 +91,7 @@ export async function getMeetPlan(graphName?: string): Promise<MeetPlanEntry[]> 
     `MATCH (me:Me)-[r:PLANS_TO_MEET]->(p:Person)
      OPTIONAL MATCH (p)-[:SPEAKS_AT]->(s:Session)
      OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
-     RETURN p.name AS name, p.headline AS headline, p.linkedin_url AS linkedinUrl,
+     RETURN p.name AS name, p.headline AS headline, coalesce(p.linkedin_url, p.id) AS linkedinUrl,
             r.score AS score, r.reasons AS reasons, r.via AS via, r.opener AS opener,
             s.title AS sessionTitle, c.name AS company
      ORDER BY r.score DESC LIMIT 20`,
@@ -823,7 +823,7 @@ export async function getTodayTimeline(graphName?: string): Promise<TimelineEntr
     `MATCH (me:Me)-[r:MET]->(p:Person)
      OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
      WHERE r.at > $todayStart
-     RETURN p.name AS name, c.name AS company, r.at AS at, p.linkedin_url AS url`,
+     RETURN p.name AS name, c.name AS company, r.at AS at, coalesce(p.linkedin_url, p.id) AS url`,
     { todayStart },
     graphName,
   );
@@ -884,7 +884,9 @@ export async function getEventSummary(graphName?: string): Promise<{ eventName: 
   const result = await roQuery(
     `MATCH (me:Me)-[:ATTENDED]->(e:Event)
      MATCH (me)-[r:HAS_INTENT]->(i:Intent) WHERE r.primary = true
-     RETURN e.name AS eventName, i.name AS primaryIntent LIMIT 1`,
+     RETURN e.name AS eventName, i.name AS primaryIntent,
+            CASE WHEN e.url IS NOT NULL AND e.url <> '' THEN 0 ELSE 1 END AS priority
+     ORDER BY priority LIMIT 1`,
     {},
     graphName,
   );
@@ -961,7 +963,7 @@ export async function getRecapPeopleForIntent(
       `MATCH (me:Me)-[:WANTS]->(r:Role)<-[:HIRING]-(c:Company)<-[:WORKS_AT]-(p:Person)<-[:MET]-(me)
        OPTIONAL MATCH (p)-[:HAS_NOTE]->(n:Note)
        OPTIONAL MATCH (p)-[:HAS_CONTEXT]->(ctx:Context)
-       RETURN p.name AS name, p.headline AS headline, p.linkedin_url AS linkedinUrl,
+       RETURN p.name AS name, p.headline AS headline, coalesce(p.linkedin_url, p.id) AS linkedinUrl,
               c.name AS company, n.text AS noteText, ctx.bullets AS ctxBullets,
               ctx.fetched_at AS ctxFetched
        LIMIT 10`,
@@ -975,7 +977,7 @@ export async function getRecapPeopleForIntent(
        OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
        OPTIONAL MATCH (p)-[:HAS_NOTE]->(n:Note)
        OPTIONAL MATCH (p)-[:HAS_CONTEXT]->(ctx:Context)
-       RETURN p.name AS name, p.headline AS headline, p.linkedin_url AS linkedinUrl,
+       RETURN p.name AS name, p.headline AS headline, coalesce(p.linkedin_url, p.id) AS linkedinUrl,
               c.name AS company, n.text AS noteText, ctx.bullets AS ctxBullets,
               ctx.fetched_at AS ctxFetched
        LIMIT 10`,
@@ -987,7 +989,7 @@ export async function getRecapPeopleForIntent(
       `MATCH (me:Me)-[:MET]->(p:Person)-[:WORKS_AT]->(c:Company)
        OPTIONAL MATCH (p)-[:HAS_NOTE]->(n:Note)
        OPTIONAL MATCH (p)-[:HAS_CONTEXT]->(ctx:Context)
-       RETURN p.name AS name, p.headline AS headline, p.linkedin_url AS linkedinUrl,
+       RETURN p.name AS name, p.headline AS headline, coalesce(p.linkedin_url, p.id) AS linkedinUrl,
               c.name AS company, n.text AS noteText, ctx.bullets AS ctxBullets,
               ctx.fetched_at AS ctxFetched
        LIMIT 10`,
@@ -1054,7 +1056,7 @@ export async function getFollowUps(
   const result = await roQuery(
     `MATCH (me:Me)-[:FOLLOW_UP]->(f:FollowUp)-[:FOR]->(p:Person)
      OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
-     RETURN p.name AS personName, p.linkedin_url AS personUrl, c.name AS company,
+     RETURN p.name AS personName, coalesce(p.linkedin_url, p.id) AS personUrl, c.name AS company,
             f.message AS message, f.status AS status,
             f.note_source AS noteSource, f.context_source AS contextSource`,
     {},
@@ -1212,7 +1214,10 @@ export interface StoredEvent {
 
 export async function getStoredEvent(graphName?: string): Promise<StoredEvent | null> {
   const result = await roQuery(
-    'MATCH (e:Event) RETURN e.name AS name, e.date AS date, e.venue AS venue, e.url AS url LIMIT 1',
+    `MATCH (e:Event) WHERE e.name <> ''
+     RETURN e.name AS name, e.date AS date, e.venue AS venue, e.url AS url,
+            CASE WHEN e.url IS NOT NULL AND e.url <> '' THEN 0 ELSE 1 END AS priority
+     ORDER BY priority, name LIMIT 1`,
     {},
     graphName,
   );

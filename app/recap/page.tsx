@@ -30,7 +30,10 @@ function intentLabel(intent: string): string {
 }
 
 function encodedUrl(raw: string): string {
-  return Buffer.from(raw).toString('base64url');
+  const bytes = new TextEncoder().encode(raw);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/u, '');
 }
 
 function groupIdeasByTopic(ideas: RecapIdea[]): Map<string, RecapIdea[]> {

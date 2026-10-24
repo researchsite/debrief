@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import { setTimeout as delay } from 'node:timers/promises';
 
 export interface BDProfile {
   name: string;
@@ -36,19 +37,21 @@ function readFixtureRaw(filename: string): string {
  * Fetch LinkedIn profiles for the given URLs.
  * In mock mode returns fixture data from fixtures/brightdata/profile.json.
  */
-export async function fetchProfiles(urls: string[]): Promise<BDProfile[]> {
+export async function fetchProfiles(urls: string[], options: { signal?: AbortSignal } = {}): Promise<BDProfile[]> {
   if (isMock) {
     const fixtures = readFixture<BDProfile[]>('profile.json');
     return urls.map((_, i) => fixtures[i % fixtures.length]);
   }
 
   const apiKey = process.env.BRIGHTDATA_API_KEY;
+  const signal = options.signal ?? AbortSignal.timeout(60_000);
 
   // Submit batch job
   const submitRes = await fetch(
     'https://api.brightdata.com/datasets/v3/scrape?dataset_id=gd_l1viktl72bvl7bjuj0&format=json',
     {
       method: 'POST',
+      signal,
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(urls.map((url) => ({ url }))),
     },
@@ -68,10 +71,10 @@ export async function fetchProfiles(urls: string[]): Promise<BDProfile[]> {
 
   // Poll until ready (max 60s)
   for (let attempt = 0; attempt < 12; attempt++) {
-    await new Promise((r) => setTimeout(r, 5000));
+    await delay(5000, undefined, { signal });
     const progressRes = await fetch(
       `https://api.brightdata.com/datasets/v3/progress/${snapshotId}`,
-      { headers: { Authorization: `Bearer ${apiKey}` } },
+      { headers: { Authorization: `Bearer ${apiKey}` }, signal },
     );
     const progress = (await progressRes.json()) as { status: string };
     if (progress.status === 'ready') break;
@@ -83,7 +86,7 @@ export async function fetchProfiles(urls: string[]): Promise<BDProfile[]> {
   // Download results
   const downloadRes = await fetch(
     `https://api.brightdata.com/datasets/v3/snapshot/${snapshotId}?format=json`,
-    { headers: { Authorization: `Bearer ${apiKey}` } },
+    { headers: { Authorization: `Bearer ${apiKey}` }, signal },
   );
 
   if (!downloadRes.ok) {
@@ -135,7 +138,7 @@ export async function serpSearch(
  * Fetch a web page via Bright Data's Web Unlocker.
  * In mock mode returns fixture event page HTML.
  */
-export async function fetchPage(url: string): Promise<string> {
+export async function fetchPage(url: string, options: { signal?: AbortSignal } = {}): Promise<string> {
   if (isMock) {
     return readFixtureRaw('event_page.html');
   }
@@ -145,6 +148,7 @@ export async function fetchPage(url: string): Promise<string> {
 
   const response = await fetch('https://api.brightdata.com/request', {
     method: 'POST',
+    signal: options.signal ?? AbortSignal.timeout(20_000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
@@ -163,7 +167,8 @@ export async function fetchPage(url: string): Promise<string> {
   }
 
   const result = (await response.json()) as { status_code: number; body: string };
-  return result.body ?? '';
+  if (result.status_code >= 400 || typeof result.body !== 'string' || !result.body.trim()) throw new Error('The linked page could not be read.');
+  return result.body;
 }
 
 interface BDSerpOrganic {
