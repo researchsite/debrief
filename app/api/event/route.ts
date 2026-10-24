@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractEventFromUrl, type EventExtraction } from '@/lib/event-extract';
 import { getMeetPlan, getStoredEvent, getSessions, type MeetPlanEntry } from '@/lib/graph-writes';
+import fs from 'fs';
+import path from 'path';
 
 export async function GET(): Promise<NextResponse> {
   try {
@@ -42,6 +44,20 @@ export async function POST(req: NextRequest): Promise<NextResponse<ResponseBody>
   try {
     const extraction = await extractEventFromUrl(body.url, 'debrief');
     const meetPlan = await getMeetPlan('debrief');
+
+    // Save extraction locally so it can be re-seeded without re-entering the URL
+    try {
+      const eventsDir = path.join(process.cwd(), '_private', 'events');
+      fs.mkdirSync(eventsDir, { recursive: true });
+      const slug = extraction.event.name
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)
+        || new URL(body.url).hostname.replace(/\./g, '-');
+      const filePath = path.join(eventsDir, `${slug}.json`);
+      fs.writeFileSync(filePath, JSON.stringify({ url: body.url, savedAt: new Date().toISOString(), extraction }, null, 2));
+    } catch {
+      // Non-fatal — graph was already written successfully
+    }
+
     return NextResponse.json({ ok: true, extraction, meetPlan });
   } catch (err) {
     console.error('[POST /api/event]', err);
