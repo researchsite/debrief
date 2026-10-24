@@ -1,5 +1,117 @@
 import { query, roQuery } from './graph';
 
+// ────────────────────────────────────────────────────────────
+// Session + Meet Plan graph writes
+// ────────────────────────────────────────────────────────────
+
+export interface SessionInput {
+  title: string;
+  starts: string;
+  ends: string;
+  room: string;
+  abstract: string;
+  eventName: string;
+  speakerUrl?: string; // linkedin_url of the speaker Person node
+}
+
+export async function writeSession(input: SessionInput, graphName?: string): Promise<void> {
+  const { title, starts, ends, room, abstract, eventName, speakerUrl } = input;
+
+  await query(
+    'MERGE (s:Session {title: $title}) SET s.starts = $starts, s.ends = $ends, s.room = $room, s.abstract = $abstract',
+    { title, starts, ends, room, abstract },
+    graphName,
+  );
+
+  await query(
+    'MATCH (s:Session {title: $title}) MATCH (e:Event {name: $eventName}) MERGE (s)-[:PART_OF]->(e)',
+    { title, eventName },
+    graphName,
+  );
+
+  if (speakerUrl) {
+    await query(
+      'MATCH (p:Person {linkedin_url: $speakerUrl}) MATCH (s:Session {title: $title}) MERGE (p)-[:SPEAKS_AT]->(s)',
+      { speakerUrl, title },
+      graphName,
+    );
+  }
+}
+
+export interface PlanScore {
+  personUrl: string;
+  score: number;
+  reasons: string[];
+  via: string[]; // names of connecting people for warm-intro
+  opener: string; // one-line opener from OpenAI
+}
+
+export async function writeMeetPlan(plans: PlanScore[], graphName?: string): Promise<void> {
+  for (const plan of plans) {
+    await query(
+      `MATCH (me:Me) MATCH (p:Person {linkedin_url: $url})
+       MERGE (me)-[r:PLANS_TO_MEET]->(p)
+       SET r.score = $score, r.reasons = $reasons, r.via = $via, r.opener = $opener`,
+      {
+        url: plan.personUrl,
+        score: plan.score,
+        reasons: plan.reasons,
+        via: plan.via,
+        opener: plan.opener,
+      },
+      graphName,
+    );
+  }
+}
+
+export async function writeMet(personUrl: string, graphName?: string): Promise<void> {
+  const timestamp = Date.now();
+  await query(
+    `MATCH (me:Me) MATCH (p:Person {linkedin_url: $url})
+     MERGE (me)-[:MET {at: $timestamp}]->(p)`,
+    { url: personUrl, timestamp },
+    graphName,
+  );
+}
+
+export interface MeetPlanEntry {
+  name: string;
+  headline: string;
+  linkedinUrl: string;
+  score: number;
+  reasons: string[];
+  via: string[];
+  opener: string;
+  sessionTitle?: string;
+  company?: string;
+}
+
+export async function getMeetPlan(graphName?: string): Promise<MeetPlanEntry[]> {
+  const result = await roQuery(
+    `MATCH (me:Me)-[r:PLANS_TO_MEET]->(p:Person)
+     OPTIONAL MATCH (p)-[:SPEAKS_AT]->(s:Session)
+     OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
+     RETURN p.name AS name, p.headline AS headline, p.linkedin_url AS linkedinUrl,
+            r.score AS score, r.reasons AS reasons, r.via AS via, r.opener AS opener,
+            s.title AS sessionTitle, c.name AS company
+     ORDER BY r.score DESC LIMIT 20`,
+    {},
+    graphName,
+  );
+
+  return (result.data ?? []).map((row: Record<string, unknown>) => ({
+    name: String(row.name ?? ''),
+    headline: String(row.headline ?? ''),
+    linkedinUrl: String(row.linkedinUrl ?? ''),
+    score: Number(row.score ?? 0),
+    reasons: Array.isArray(row.reasons) ? (row.reasons as string[]) : [],
+    via: Array.isArray(row.via) ? (row.via as string[]) : [],
+    opener: String(row.opener ?? ''),
+    sessionTitle: row.sessionTitle != null ? String(row.sessionTitle) : undefined,
+    company: row.company != null ? String(row.company) : undefined,
+  }));
+}
+
 export interface SetupInput {
   name: string;
   linkedinUrl: string;
