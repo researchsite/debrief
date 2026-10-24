@@ -1,135 +1,242 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, DragEventHandler, ReactNode } from 'react';
 import { PixelSprite, PX } from '@/components/pixel';
+import { ConferenceBackdrop } from './ConferenceBackdrop';
+import './import-scene.css';
 
-/* Left hand seen from behind the camera: thumb on the back, wrist and sleeve exiting the bottom. */
+/** Length in scene units; --u is 4px on phones and grows on wider screens. */
+const u = (n: number) => `calc(var(--u) * ${n})`;
+/** Length in hand-pixel units (--h), so the hands can be chunkier than the camera details. */
+const h = (n: number) => `calc(var(--h) * ${n})`;
+const spriteSize = (rows: string[], unit = h): CSSProperties => ({ width: unit(rows[0].length), height: unit(rows.length), display: 'block' });
+
+const SKIN = { O: PX.ink, s: PX.skin, d: PX.skinShade, n: '#ffe3cc', c: PX.blue, k: '#2557b8', w: PX.white };
+
+/* Right hand from behind: thumb on the back's thumb rest (cols 0-6 sit on the body), fingers wrapping the grip edge. */
+const RIGHT_HAND = [
+  '.OOOO.........',
+  'OnnssO........',
+  'OnnssO........',
+  'OsssdO........',
+  'OsssdO........',
+  'OsssdO........',
+  'OsssdOOOOOO...',
+  'OssssdssssdO..',
+  'OsssssssssssO.',
+  'OsssssssssddO.',
+  'OssssssOOOOOO.',
+  'OsssssssssssO.',
+  'OssssssssssssO',
+  'OsssssssssssdO',
+  'OssssssOOOOOOO',
+  '.OsssssssssssO',
+  '.OssssssssssdO',
+  '.OsssssssssddO',
+  '..OsssssOOOOO.',
+  '..OssssssssdO.',
+  '..OsssssssddO.',
+  '...OssssssdO..',
+  '...OOsssddO...',
+  '...OssssddO...',
+  '...OOOOOOOOO..',
+  '...OwwwwwwwO..',
+  '...OOOOOOOOO..',
+  '...OcccccckO..',
+  '...OcccccckO..',
+];
+
+/* Right index finger lying across the top plate, tip resting on the shutter button. */
+const INDEX_FINGER = [
+  'OOOOOOOOOO....',
+  'OnnsssssssOO..',
+  'OnnsssssssssO.',
+  'OsdddddsssssO.',
+  '.OOOOOOOdsssdO',
+  '.......OsssddO',
+  '.......OsssdO.',
+  '.......OsssdO.',
+  '......OssssdO.',
+  '......OssssdO.',
+  '......OssssdO.',
+  '......OssssdO.',
+];
+
+/* Left hand cradling the body from below; fingertips curl up the left side (body edge between cols 4 and 5, bottom at row 6). */
 const LEFT_HAND = [
-  '.........OOOO...',
-  '........OnnssO..',
-  '........OnnssO..',
-  '........OsssdO..',
-  '...OOOO.OsssdO..',
-  '..OssssOOsssdO..',
-  '.OssssssssssdO..',
-  'OsssssssssssdO..',
-  'OssssssssssddO..',
-  'OssssssssssdO...',
-  'OsssssssssddO...',
-  'OssssssssddO....',
-  '.OsssssssdO.....',
-  '.OssssssddO.....',
-  '.OOsssssdOO.....',
-  'OOOOOOOOOOOO....',
-  'OccccccccckO....',
-  'OccccccccckO....',
-  'OccccccccckO....',
-  'OccccccccckO....',
-  'OccccccccckO....',
+  '.OOO..................',
+  'OnnsO.................',
+  'OsssdO................',
+  'OsssdO................',
+  'OsssdOOO..............',
+  'OsssssdO..............',
+  'OssssssOOOOOOOOOOOOOO.',
+  'OssssssssssssssssssdO.',
+  'OssssssssssssssssssddO',
+  '.OssssssssssssssssddO.',
+  '.OOsssssssssssssdddO..',
+  '...OOsssssssssddOO....',
+  '.....OOsssssddO.......',
+  '......OOOOOOOOO.......',
+  '......OwwwwwwwO.......',
+  '......OOOOOOOOO.......',
+  '......OcccccckO.......',
+  '......OcccccckO.......',
 ];
-const RIGHT_HAND = LEFT_HAND.map((row) => row.split('').reverse().join(''));
 
-const HAND_PALETTE = {
-  O: PX.ink,
-  s: PX.skin,
-  d: PX.skinShade,
-  n: '#ffe0c8',
-  c: PX.blue,
-  k: '#2557b8',
-};
+/** Diagonal neck strap leaving a lug toward the top-right; mirrored for the left lug. */
+const STRAP_RIGHT = Array.from({ length: 14 }, (_, y) => {
+  const x = 13 - y;
+  const row = Array(16).fill('.');
+  row[x] = 'O'; row[x + 1] = 'r'; row[x + 2] = 'y'; row[x + 3] = 'O';
+  return row.join('');
+});
+const STRAP_LEFT = STRAP_RIGHT.map((row) => row.split('').reverse().join(''));
+const STRAP_PALETTE = { O: PX.ink, r: PX.red, y: PX.sun };
 
-const CLOUD = [
-  '....OOOO......',
-  '..OOwwwwOO....',
-  '.OwwwwwwwwOOO.',
-  'OwwwwwwwwwwwwO',
-  'OOOOOOOOOOOOOO',
-];
-const CLOUD_PALETTE = { O: '#cfeeff', w: PX.white };
+/** Pixel-stepped rounded rectangle clip, `s` = step size. */
+function stepped(s: string): string {
+  const a = s; const b = `calc(${s} * 2)`;
+  return `polygon(${b} 0, calc(100% - ${b}) 0, calc(100% - ${b}) ${a}, calc(100% - ${a}) ${a}, calc(100% - ${a}) ${b}, 100% ${b}, 100% calc(100% - ${b}), calc(100% - ${a}) calc(100% - ${b}), calc(100% - ${a}) calc(100% - ${a}), calc(100% - ${b}) calc(100% - ${a}), calc(100% - ${b}) 100%, ${b} 100%, ${b} calc(100% - ${a}), ${a} calc(100% - ${a}), ${a} calc(100% - ${b}), 0 calc(100% - ${b}), 0 ${b}, ${a} ${b}, ${a} ${a}, ${b} ${a})`;
+}
 
-function Corner({ className }: { className: string }) {
+/** Ink-outlined block with a pixel bevel, used for top-plate parts. */
+function Part({ style, children }: { style: CSSProperties; children?: ReactNode }) {
   return (
-    <span
+    <div
       aria-hidden
-      className={`pointer-events-none absolute z-20 h-5 w-5 sm:h-7 sm:w-7 ${className}`}
-      style={{ filter: `drop-shadow(2px 2px 0 ${PX.ink})` }}
-    />
+      className="absolute"
+      style={{ border: `3px solid ${PX.ink}`, background: 'var(--imp-body)', boxShadow: 'inset 0 3px 0 var(--imp-body-hi), inset 0 -3px 0 var(--imp-body-lo)', ...style }}
+    >
+      {children}
+    </div>
   );
 }
 
+const RIDGES = `repeating-linear-gradient(90deg, #8c8aa3 0 3px, #55526b 3px 6px)`;
+
+interface CameraFrameProps {
+  /** Content shown on the LCD screen. */
+  children: ReactNode;
+  /** Camera buttons for the control panel. */
+  controls: ReactNode;
+  /** Increment to fire the full-screen flash. */
+  flashKey?: number;
+  dragOver?: boolean;
+  onDragOver?: DragEventHandler<HTMLDivElement>;
+  onDragLeave?: DragEventHandler<HTMLDivElement>;
+  onDrop?: DragEventHandler<HTMLDivElement>;
+}
+
 /**
- * Static photographer-POV composition: a pixel camera body held by two hands,
- * framing a scrollable viewfinder that hosts the page content.
+ * Photographer POV: a chunky pixel camera seen from the back, held in two hands.
+ * The back is split into an LCD screen (2/3) hosting page content and a control panel (1/3).
  */
-export function CameraFrame({ children }: { children: ReactNode }) {
+export function CameraFrame({ children, controls, flashKey = 0, dragOver = false, onDragOver, onDragLeave, onDrop }: CameraFrameProps) {
   return (
     <div
-      className="relative w-full overflow-hidden"
-      style={{ height: 'calc(100svh - 4rem)', background: `linear-gradient(${PX.sky} 0 70%, #9fe0ff 70% 100%)` }}
+      className="imp-stage relative w-full overflow-hidden"
+      style={{ height: 'calc(100svh - 4rem)', background: '#4b3f99' }}
     >
-      <PixelSprite rows={CLOUD} palette={CLOUD_PALETTE} scale={5} className="absolute left-[6%] top-1" />
-      <PixelSprite rows={CLOUD} palette={CLOUD_PALETTE} scale={4} className="absolute right-[8%] top-3 hidden sm:block" />
+      <ConferenceBackdrop />
 
-      <div className="relative mx-auto h-full w-full max-w-[900px] px-2 pt-5 pb-10 sm:px-6 sm:pt-7 sm:pb-12">
-        {/* Top plate details: mode dial and shutter button */}
-        <div aria-hidden className="absolute left-[14%] top-2 h-4 w-12 border-4 sm:top-3 sm:h-5 sm:w-16" style={{ background: PX.stone, borderColor: PX.ink }} />
-        <div aria-hidden className="absolute right-[16%] top-1 sm:top-1.5 flex flex-col items-center">
-          <div className="h-3 w-8 border-4 border-b-0 sm:w-10" style={{ background: PX.red, borderColor: PX.ink }} />
-          <div className="h-3 w-14 border-4 border-b-0 sm:h-4 sm:w-16" style={{ background: PX.night, borderColor: PX.ink }} />
+      {/* Body box: everything else is positioned relative to it. */}
+      <div
+        className="absolute"
+        style={{ top: u(9), bottom: h(13), left: `max(calc(${h(5)} + 10px), calc((100% - 1000px) / 2))`, right: `max(calc(${h(7)} + 10px), calc((100% - 1000px) / 2))` }}
+      >
+        {/* Neck strap */}
+        <PixelSprite rows={STRAP_LEFT} palette={STRAP_PALETTE} className="pointer-events-none absolute" style={{ ...spriteSize(STRAP_LEFT, u), left: u(-14), top: u(-8) }} />
+        <PixelSprite rows={STRAP_RIGHT} palette={STRAP_PALETTE} className="pointer-events-none absolute hidden sm:block" style={{ ...spriteSize(STRAP_RIGHT, u), right: u(-14), top: u(-8) }} />
+        {/* Strap lugs */}
+        <Part style={{ left: u(-2), top: u(3), width: u(3), height: u(5), background: PX.stone }} />
+        <Part style={{ right: u(-2), top: u(3), width: u(3), height: u(5), background: PX.stone }} />
+
+        {/* Top plate: mode dial, viewfinder hump with hot shoe, command dial, shutter */}
+        <Part style={{ left: '12%', bottom: 'calc(100% - 3px)', width: u(11), height: u(3), background: RIDGES }} />
+        <Part style={{ left: `calc(12% + ${u(1.5)})`, bottom: `calc(100% + ${u(3)} - 6px)`, width: u(8), height: u(1.5), background: '#55526b' }} />
+        <div aria-hidden className="absolute left-1/2 -translate-x-1/2" style={{ bottom: 'calc(100% - 3px)', width: u(28), height: u(6), background: PX.ink, clipPath: 'polygon(14% 0, 86% 0, 86% 30%, 100% 30%, 100% 100%, 0 100%, 0 30%, 14% 30%)' }}>
+          <div className="absolute inset-[3px] bottom-0" style={{ background: 'var(--imp-body)', clipPath: 'polygon(14% 0, 86% 0, 86% 30%, 100% 30%, 100% 100%, 0 100%, 0 30%, 14% 30%)', boxShadow: 'inset 0 3px 0 var(--imp-body-hi)' }} />
         </div>
+        <Part style={{ left: '50%', transform: 'translateX(-50%)', bottom: `calc(100% + ${u(6)} - 6px)`, width: u(12), height: u(1.5), background: PX.stone }} />
+        <Part style={{ right: `calc(${h(9)} + ${u(2)})`, bottom: 'calc(100% - 3px)', width: u(8), height: u(2), background: RIDGES }} />
+        <Part style={{ right: h(4), bottom: 'calc(100% - 3px)', width: h(5), height: h(1.5) }} />
+        <Part style={{ right: h(4.75), bottom: `calc(100% + ${h(1.5)} - 6px)`, width: h(3.5), height: h(1), background: PX.red }} />
 
         {/* Camera body */}
-        <div
-          className="relative flex h-full flex-col border-4 px-3 sm:px-5"
-          style={{ background: PX.night, borderColor: PX.ink, boxShadow: `6px 6px 0 0 ${PX.ink}, inset 0 4px 0 0 #3d3470` }}
-        >
-          {/* HUD along the top edge */}
-          <div className="font-pixel-body flex h-8 shrink-0 items-center justify-between text-base leading-none sm:h-10 sm:text-xl" style={{ color: PX.white }}>
-            <span className="flex items-center gap-2">
-              <span aria-hidden className="inline-block h-3 w-3" style={{ background: PX.red, boxShadow: `0 0 0 2px ${PX.ink}` }} />
-              <span style={{ color: PX.red }}>REC</span>
-            </span>
-            <span className="tracking-wider" style={{ color: PX.sun }}>ISO 400&nbsp;&nbsp;1/60&nbsp;&nbsp;F2.8</span>
-          </div>
-
-          {/* Viewfinder screen */}
+        <div className="absolute inset-0" style={{ background: PX.ink, clipPath: stepped(u(1)) }}>
           <div
-            className="relative min-h-0 flex-1 border-4"
+            className="absolute flex flex-col gap-[calc(var(--u)*2)] sm:flex-row"
             style={{
-              borderColor: PX.ink,
-              backgroundColor: '#e8f6f1',
-              backgroundImage: [
-                'linear-gradient(to right, transparent calc(33.333% - 1px), rgba(27,21,48,0.12) calc(33.333% - 1px) calc(33.333% + 1px), transparent calc(33.333% + 1px), transparent calc(66.666% - 1px), rgba(27,21,48,0.12) calc(66.666% - 1px) calc(66.666% + 1px), transparent calc(66.666% + 1px))',
-                'linear-gradient(to bottom, transparent calc(33.333% - 1px), rgba(27,21,48,0.12) calc(33.333% - 1px) calc(33.333% + 1px), transparent calc(33.333% + 1px), transparent calc(66.666% - 1px), rgba(27,21,48,0.12) calc(66.666% - 1px) calc(66.666% + 1px), transparent calc(66.666% + 1px))',
-                'linear-gradient(rgba(27,21,48,0.04) 1px, transparent 1px)',
-                'linear-gradient(to right, rgba(27,21,48,0.04) 1px, transparent 1px)',
-              ].join(','),
-              backgroundSize: '100% 100%, 100% 100%, 16px 16px, 16px 16px',
-              boxShadow: `inset 4px 4px 0 0 rgba(27,21,48,0.18)`,
+              inset: 4,
+              clipPath: stepped(u(1)),
+              background: 'var(--imp-body)',
+              boxShadow: `inset ${u(1)} ${u(1)} 0 var(--imp-body-hi), inset ${u(-1)} ${u(-1)} 0 var(--imp-body-lo)`,
+              padding: `${u(5)} calc(${h(7)} + 2px) ${u(4)} ${u(3)}`,
             }}
           >
-            <Corner className="left-2 top-2 border-l-4 border-t-4 border-white" />
-            <Corner className="right-2 top-2 border-r-4 border-t-4 border-white" />
-            <Corner className="bottom-2 left-2 border-b-4 border-l-4 border-white" />
-            <Corner className="bottom-2 right-2 border-b-4 border-r-4 border-white" />
-            <div className="absolute inset-0 overflow-y-auto overscroll-contain">
-              <div className="mx-auto w-full max-w-[640px] px-4 pt-6 pb-24 sm:px-8 sm:pt-8">{children}</div>
+            {/* Rubber thumb rest along the right edge */}
+            <div aria-hidden className="absolute" style={{ right: h(0.5), top: u(2), bottom: u(2), width: h(6), backgroundColor: '#24202f', backgroundImage: 'radial-gradient(#3a3550 1px, transparent 1.5px)', backgroundSize: '6px 6px', border: `2px solid ${PX.ink}` }} />
+            {/* Eyepiece */}
+            <div aria-hidden className="absolute left-1/2 -translate-x-1/2" style={{ top: 0, width: u(14), height: u(4.5), background: '#141020', border: `3px solid ${PX.ink}`, borderTop: 0 }}>
+              <div className="mx-auto" style={{ marginTop: u(0.8), width: u(7), height: u(2), background: '#2d3a6a', boxShadow: `inset ${u(1)} 0 0 #4a5a9a` }} />
             </div>
-          </div>
+            <span className="font-pixel pointer-events-none absolute text-[8px] tracking-widest sm:text-[10px]" style={{ left: u(3), top: u(1.6), color: PX.stone }}>DEBRIEF D-1</span>
 
-          {/* Bottom edge: battery and shot counter */}
-          <div className="font-pixel-body flex h-8 shrink-0 items-center justify-center gap-3 text-base leading-none sm:h-10 sm:text-xl" style={{ color: PX.stone }}>
-            <span aria-hidden className="inline-flex h-3 w-7 items-stretch gap-[2px] border-2 p-[1px]" style={{ borderColor: PX.stone }}>
-              <span className="flex-1" style={{ background: PX.grass }} />
-              <span className="flex-1" style={{ background: PX.grass }} />
-              <span className="flex-1" style={{ background: PX.grass }} />
-            </span>
-            <span>[ 24 ]</span>
+            {/* LCD screen */}
+            <div
+              className="relative min-h-0 flex-[2] sm:min-w-0"
+              style={{ background: '#0d0a18', border: `3px solid ${PX.ink}`, padding: u(1), boxShadow: `0 0 0 2px #4a4562` }}
+            >
+              <div
+                className="relative h-full w-full overflow-hidden"
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+                style={{
+                  backgroundColor: dragOver ? '#fff3b8' : '#e8f6f1',
+                  backgroundImage: 'linear-gradient(rgba(27,21,48,0.05) 1px, transparent 1px), linear-gradient(to right, rgba(27,21,48,0.05) 1px, transparent 1px)',
+                  backgroundSize: '14px 14px',
+                  outline: dragOver ? `4px dashed ${PX.ink}` : undefined,
+                  outlineOffset: -8,
+                  boxShadow: 'inset 4px 4px 0 rgba(27,21,48,0.18)',
+                }}
+              >
+                {/* HUD */}
+                <div className="font-pixel-body pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-between px-2 py-0.5 text-sm leading-none sm:px-3 sm:text-lg" style={{ background: 'rgba(13,10,24,0.82)', color: PX.white }}>
+                  <span className="flex items-center gap-1.5">
+                    <span aria-hidden className="imp-rec inline-block h-2.5 w-2.5" style={{ background: PX.red }} />
+                    <span style={{ color: PX.red }}>REC</span>
+                  </span>
+                  <span className="tracking-wider" style={{ color: PX.sun }}>ISO 400 · F2.8 · 1/60</span>
+                  <span aria-hidden className="inline-flex h-3 w-7 items-stretch gap-[2px] border-2 p-[1px]" style={{ borderColor: PX.white }}>
+                    <span className="flex-1" style={{ background: PX.grass }} />
+                    <span className="flex-1" style={{ background: PX.grass }} />
+                    <span className="flex-1" style={{ background: PX.grass }} />
+                  </span>
+                </div>
+                <div className="absolute inset-0 overflow-y-auto overscroll-contain">
+                  <div className="mx-auto flex min-h-full w-full max-w-[640px] flex-col px-3 pt-8 pb-4 sm:px-6 sm:pt-10">{children}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Control panel */}
+            <div className="relative flex min-h-0 flex-1 flex-row gap-3 sm:min-w-0 sm:flex-col sm:gap-4">{controls}</div>
           </div>
+        </div>
+
+        {/* Hands */}
+        <PixelSprite rows={INDEX_FINGER} palette={SKIN} className="pointer-events-none absolute z-10" style={{ ...spriteSize(INDEX_FINGER), right: h(-7), top: h(-6.5) }} />
+        <div className="pointer-events-none absolute z-20" style={{ right: h(-7), top: h(1) }}>
+          <PixelSprite rows={RIGHT_HAND} palette={SKIN} style={spriteSize(RIGHT_HAND)} />
+          <div style={{ marginLeft: h(3), width: h(9), height: '100vh', background: PX.blue, borderLeft: `${h(1)} solid ${PX.ink}`, borderRight: `${h(1)} solid ${PX.ink}`, boxShadow: `inset ${h(-1)} 0 0 #2557b8` }} />
+        </div>
+        <div className="pointer-events-none absolute z-20" style={{ left: h(-5), top: `calc(100% - ${h(6)})` }}>
+          <PixelSprite rows={LEFT_HAND} palette={SKIN} style={spriteSize(LEFT_HAND)} />
+          <div style={{ marginLeft: h(6), width: h(9), height: '100vh', background: PX.blue, borderLeft: `${h(1)} solid ${PX.ink}`, borderRight: `${h(1)} solid ${PX.ink}`, boxShadow: `inset ${h(-1)} 0 0 #2557b8` }} />
         </div>
       </div>
 
-      {/* Hands gripping the bottom corners */}
-      <PixelSprite rows={LEFT_HAND} palette={HAND_PALETTE} scale={5} className="pointer-events-none absolute bottom-0 z-30 h-auto w-20 sm:w-24" style={{ left: 'max(0px, calc(50% - 470px))' }} />
-      <PixelSprite rows={RIGHT_HAND} palette={HAND_PALETTE} scale={5} className="pointer-events-none absolute bottom-0 z-30 h-auto w-20 sm:w-24" style={{ right: 'max(0px, calc(50% - 470px))' }} />
+      {flashKey > 0 && <div key={flashKey} aria-hidden className="imp-flash" />}
     </div>
   );
 }
