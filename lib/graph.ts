@@ -8,8 +8,10 @@ export type QueryResult = GraphReply<Record<string, unknown>>;
 const host = process.env.FALKORDB_HOST ?? 'localhost';
 const port = parseInt(process.env.FALKORDB_PORT ?? '6379', 10);
 
-// Singleton cache: graphName -> Graph instance
-const graphCache = new Map<string, Graph>();
+// Cache only the DB connection — never cache the Graph handle.
+// The Graph object tracks server schema version; caching it causes
+// "ERR invalid graph version" when the graph is modified externally
+// (e.g. by seed scripts running in a separate process).
 let dbClient: FalkorDB | null = null;
 
 async function getDb(): Promise<FalkorDB> {
@@ -21,13 +23,8 @@ async function getDb(): Promise<FalkorDB> {
 
 export async function getGraph(name?: string): Promise<Graph> {
   const graphName = name ?? process.env.FALKORDB_GRAPH ?? 'debrief';
-  const cached = graphCache.get(graphName);
-  if (cached) return cached;
-
   const db = await getDb();
-  const graph = db.selectGraph(graphName);
-  graphCache.set(graphName, graph);
-  return graph;
+  return db.selectGraph(graphName);
 }
 
 export async function query(
