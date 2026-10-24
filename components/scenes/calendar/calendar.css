@@ -25,73 +25,165 @@
 }
 
 /* ---------- Foreground composition ---------- */
-/* Phone (portrait): board on top, atrium below, small attendee bottom-left. */
+/*
+ * The board hangs on cables from a steel truss spanning the atrium at balcony
+ * height; the user's small avatar stands on the ground-floor concourse below,
+ * looking up at it. Phone (portrait): board across the top, truss bolted to
+ * both balconies. Wide: board left of centre, truss cantilevered from the
+ * left balcony, rest of the atrium visible to the right.
+ */
 .cal-foreground {
+  --cal-board-top: 34px;
+  --cal-cable: 10px;
+  --cal-truss-h: 16px;
   position: relative;
   z-index: 1;
   height: 100%;
 }
 
+.cal-truss {
+  position: absolute;
+  top: calc(var(--cal-board-top) - var(--cal-cable) - var(--cal-truss-h));
+  left: 0;
+  right: 0;
+  height: var(--cal-truss-h);
+  /* Box truss: posts every 16px with alternating diagonals between the chords. */
+  background:
+    repeating-linear-gradient(90deg, #5d7480 0 3px, transparent 3px 16px),
+    repeating-linear-gradient(58deg, transparent 0 6px, #7d96a1 6px 8px, transparent 8px 14px),
+    #d3dee2;
+  border-block: 3px solid var(--px-ink);
+  box-shadow:
+    inset 0 2px 0 #f2f7f8,
+    0 4px 0 rgba(27, 21, 48, 0.2);
+}
+
 .cal-boardArea {
   position: absolute;
-  top: 12px;
+  top: var(--cal-board-top);
   left: 16px;
   right: 16px;
-  height: 55%;
+  height: 53%;
   display: flex;
   justify-content: center;
 }
 
-.cal-ground {
+/* Cables from the truss down to the board's top corners. */
+.cal-billboard::before,
+.cal-billboard::after {
+  content: '';
   position: absolute;
-  left: 10px;
-  bottom: 6px;
-  height: 19%;
-  aspect-ratio: 16 / 24;
+  bottom: calc(100% + 8px);
+  width: 4px;
+  height: calc(var(--cal-cable) + 8px);
+  background: #8fa9b3;
+  border-inline: 1px solid var(--px-ink);
 }
+.cal-billboard::before { left: 16%; }
+.cal-billboard::after { right: 16%; }
 
+/* Avatar on the concourse; the sprite is 18x24 pixels, drawn at an integer scale. */
 .cal-attendee {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  filter: drop-shadow(4px 4px 0 rgba(27, 21, 48, 0.25));
+  left: 24%;
+  bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
 }
 
-/* Wide: attendee fills the left third, board hangs in the middle third. */
+/* Contact shadow so the avatar reads as standing on the carpet. */
+.cal-attendee::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  bottom: -3px;
+  width: 120%;
+  height: 8px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: rgba(90, 52, 20, 0.35);
+}
+
+.cal-attendeeSprite {
+  display: block;
+  width: 36px;
+  height: 48px;
+  filter: drop-shadow(3px 3px 0 rgba(27, 21, 48, 0.25));
+}
+
+.cal-youTag {
+  position: relative;
+  padding: 2px 4px 1px;
+  font-size: 0.55rem;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  color: var(--px-ink);
+  background: var(--px-sun);
+  border: 2px solid var(--px-ink);
+  box-shadow: 2px 2px 0 rgba(27, 21, 48, 0.3);
+  margin-bottom: 6px;
+}
+/* Downward pointer under the tag. */
+.cal-youTag::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-top-color: var(--px-ink);
+}
+
 @media (min-width: 768px) {
-  .cal-boardArea {
-    top: 27%;
-    bottom: 5%;
-    left: 50%;
-    right: auto;
-    height: auto;
-    width: clamp(380px, 34vw, 560px);
-    transform: translateX(-50%);
+  .cal-foreground {
+    --cal-board-top: 21%;
+    --cal-cable: 26px;
+    --cal-truss-h: 22px;
   }
 
-  .cal-ground {
-    left: max(16px, calc(16.5% - 21svh));
-    bottom: 0;
-    height: 64%;
+  .cal-truss {
+    right: auto;
+    width: 55.5%;
+  }
+  /* Truss end plate where it would meet the next column. */
+  .cal-truss::after {
+    content: '';
+    position: absolute;
+    right: -4px;
+    top: -9px;
+    width: 8px;
+    height: calc(100% + 18px);
+    background: #8fa9b3;
+    border: 2px solid var(--px-ink);
+  }
+
+  .cal-boardArea {
+    left: 12%;
+    right: auto;
+    width: 43%;
+    height: 47%;
   }
 
   .cal-attendee {
-    filter: drop-shadow(8px 8px 0 rgba(27, 21, 48, 0.22));
+    left: 51%;
+    bottom: 18px;
   }
 
-  .cal-billboard::before,
-  .cal-billboard::after {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    width: 4px;
-    height: 100vh;
-    background: #8fa9b3;
-    border-left: 2px solid var(--px-ink);
+  .cal-attendeeSprite {
+    width: 90px;
+    height: 120px;
+    filter: drop-shadow(5px 5px 0 rgba(27, 21, 48, 0.22));
   }
-  .cal-billboard::before { left: 18%; }
-  .cal-billboard::after { right: 18%; }
+
+  .cal-youTag {
+    padding: 3px 6px 2px;
+    font-size: 0.7rem;
+    margin-bottom: 8px;
+  }
 }
 
 /* ---------- Billboard ---------- */

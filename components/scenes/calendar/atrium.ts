@@ -11,6 +11,8 @@ import { PX } from '@/components/pixel';
 type RGB = [number, number, number];
 
 export interface AtriumLayout {
+  /** Vanishing point horizontal position as a fraction of the canvas width (default 0.5). */
+  vpX?: number;
   /** Vanishing point height as a fraction of the canvas height. */
   vpY: number;
   /** Half-width of the concourse floor at the bottom edge, as a fraction of the canvas width. */
@@ -139,7 +141,7 @@ function drawIcon(ctx: CanvasRenderingContext2D, icon: string[], x: number, y: n
 }
 
 export function paintAtrium(ctx: CanvasRenderingContext2D, W: number, H: number, layout: AtriumLayout) {
-  const cx = W / 2;
+  const cx = Math.round(W * (layout.vpX ?? 0.5));
   const cy = Math.round(H * layout.vpY);
   const below = Math.max(1, H - cy);
   const Wf = (CAM_H * layout.spread * W) / below;

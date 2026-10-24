@@ -3,6 +3,7 @@ import './calendar.css';
 /** Class names for the calendar scene; rules live in calendar.css (global, cal- prefixed). */
 const styles = {
   attendee: 'cal-attendee',
+  attendeeSprite: 'cal-attendeeSprite',
   billboard: 'cal-billboard',
   boardArea: 'cal-boardArea',
   boardCenter: 'cal-boardCenter',
@@ -15,7 +16,6 @@ const styles = {
   eventName: 'cal-eventName',
   fab: 'cal-fab',
   foreground: 'cal-foreground',
-  ground: 'cal-ground',
   hall: 'cal-hall',
   hallCanvas: 'cal-hallCanvas',
   intentChip: 'cal-intentChip',
@@ -29,6 +29,8 @@ const styles = {
   rowTitle: 'cal-rowTitle',
   screen: 'cal-screen',
   stage: 'cal-stage',
+  truss: 'cal-truss',
+  youTag: 'cal-youTag',
 } as const;
 
 export default styles;

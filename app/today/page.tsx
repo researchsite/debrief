@@ -70,12 +70,11 @@ export default function TodayPage() {
       <HallBackdrop />
 
       <div className={styles.foreground}>
+        <div className={styles.truss} aria-hidden="true" />
         <div className={styles.boardArea}>
           <Billboard state={state} event={event} sections={sections} now={loadedAt} onRetry={retry} />
         </div>
-        <div className={styles.ground}>
-          <Attendee className={styles.attendee} />
-        </div>
+        <Attendee />
       </div>
 
       {/* Floating "+" capture button with Sheet */}
