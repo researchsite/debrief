@@ -1,54 +1,55 @@
-import { PixelSprite, PX } from '@/components/pixel';
+'use client';
+
+import { useEffect, useRef } from 'react';
+import { paintAtrium } from './atrium';
 import styles from './styles';
 
-const PLANT_ROWS = [
-  '...gg.gg...',
-  '..gGGgGGg..',
-  '.gGGgGGGGg.',
-  'gGGgGGgGGGg',
-  '.gGGGgGGgg.',
-  '..gGgGGgg..',
-  '...ggGgg...',
-  '.kkkkkkkkk.',
-  '.kooooooook',
-  '..kooooook.',
-  '..kooooook.',
-  '..kOOOOOOk.',
-  '...kkkkkk..',
-];
+/** Breakpoint (CSS px) between the portrait phone layout and the wide layout; mirrors calendar.css. */
+const WIDE_MIN = 768;
 
-const PLANT_PALETTE = {
-  g: PX.leaf,
-  G: PX.grass,
-  k: PX.ink,
-  o: PX.orange,
-  O: '#d96a2a',
-};
-
-/** Static warm-afternoon conference hall: wall, windows, banners, pillars, tiled floor. */
+/**
+ * Static convention-center atrium behind the schedule board. Painted once per
+ * size onto a low-resolution canvas and scaled up with crisp pixels; the
+ * picture is deterministic, so nothing here differs between server and client.
+ */
 export function HallBackdrop() {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    const canvas = canvasRef.current;
+    if (!host || !canvas) return;
+    let painted = '';
+
+    const paint = () => {
+      const { clientWidth: cw, clientHeight: ch } = host;
+      if (cw === 0 || ch === 0) return;
+      const wide = cw >= WIDE_MIN;
+      const scale = wide ? 4 : 3;
+      const w = Math.ceil(cw / scale);
+      const h = Math.ceil(ch / scale);
+      const key = `${w}x${h}`;
+      if (key === painted) return;
+      painted = key;
+      canvas.width = w;
+      canvas.height = h;
+      canvas.style.width = `${w * scale}px`;
+      canvas.style.height = `${h * scale}px`;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      paintAtrium(ctx, w, h, wide ? { vpY: 0.17, spread: 0.47 } : { vpY: 0.7, spread: 0.55 });
+    };
+
+    paint();
+    const ro = new ResizeObserver(paint);
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, []);
+
   return (
-    <div aria-hidden className={styles.hall}>
-      <div className={styles.wall}>
-        <div className={styles.windows}>
-          <span className={styles.window} />
-          <span className={styles.window} />
-          <span className={styles.window} />
-        </div>
-        <div className={styles.bunting}>
-          {Array.from({ length: 14 }, (_, i) => (
-            <span key={i} className={styles.flag} data-c={i % 4} />
-          ))}
-        </div>
-        <span className={`${styles.pillar} ${styles.pillarLeft}`} />
-        <span className={`${styles.pillar} ${styles.pillarRight}`} />
-        <span className={styles.wallTrim} />
-      </div>
-      <div className={styles.floor}>
-        <span className={styles.sunPatch} />
-      </div>
-      <PixelSprite rows={PLANT_ROWS} palette={PLANT_PALETTE} scale={5} className={styles.plantLeft} />
-      <PixelSprite rows={PLANT_ROWS} palette={PLANT_PALETTE} scale={5} className={styles.plantRight} />
+    <div ref={hostRef} aria-hidden className={styles.hall}>
+      <canvas ref={canvasRef} className={styles.hallCanvas} />
     </div>
   );
 }

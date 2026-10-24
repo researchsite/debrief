@@ -74,11 +74,6 @@ export default function TodayPage() {
           <Billboard state={state} event={event} sections={sections} now={loadedAt} onRetry={retry} />
         </div>
         <div className={styles.ground}>
-          <div className={styles.postShadow} aria-hidden />
-          <div className={styles.posts} aria-hidden>
-            <span className={styles.post} />
-            <span className={styles.post} />
-          </div>
           <Attendee className={styles.attendee} />
         </div>
       </div>

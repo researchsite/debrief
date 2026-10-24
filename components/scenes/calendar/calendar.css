@@ -1,181 +1,102 @@
-/* Calendar scene: static warm-afternoon conference hall with a schedule billboard. */
+/* Calendar scene: static convention-center atrium with a hanging schedule billboard. */
 
 .cal-stage {
   position: relative;
   height: calc(100svh - 64px);
   min-height: 480px;
   overflow: hidden;
-  background: #ffd9a8;
+  background: #f4e8d6;
 }
 
-/* ---------- Backdrop ---------- */
+/* ---------- Backdrop: pixel atrium painted on a low-res canvas ---------- */
 .cal-hall {
   position: absolute;
   inset: 0;
+  overflow: hidden;
   pointer-events: none;
 }
 
-.cal-wall {
-  position: absolute;
-  inset: 0 0 34% 0;
-  background:
-    repeating-linear-gradient(90deg, transparent 0 56px, rgba(176, 122, 74, 0.12) 56px 60px),
-    linear-gradient(#ffcf94, #ffe1b8);
-}
-
-.cal-windows {
-  position: absolute;
-  top: 14%;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: clamp(24px, 6vw, 80px);
-}
-
-.cal-window {
-  width: clamp(56px, 14vw, 120px);
-  aspect-ratio: 3 / 4;
-  border: 6px solid var(--px-ink);
-  background:
-    linear-gradient(90deg, transparent calc(50% - 3px), var(--px-ink) calc(50% - 3px) calc(50% + 3px), transparent calc(50% + 3px)),
-    linear-gradient(transparent calc(50% - 3px), var(--px-ink) calc(50% - 3px) calc(50% + 3px), transparent calc(50% + 3px)),
-    linear-gradient(#7fd3ff 0 45%, #ffd88a 75%, #ffb36b);
-  box-shadow: inset 0 -10px 0 rgba(255, 140, 66, 0.35);
-}
-
-.cal-bunting {
+.cal-hallCanvas {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  display: flex;
-  justify-content: space-between;
-  padding: 0 4%;
-  border-top: 6px solid var(--px-ink);
+  display: block;
+  image-rendering: pixelated;
 }
-
-.cal-flag {
-  width: clamp(14px, 3vw, 28px);
-  height: clamp(18px, 4vw, 34px);
-  clip-path: polygon(0 0, 100% 0, 50% 100%);
-  background: var(--px-red);
-}
-.cal-flag[data-c='1'] { background: var(--px-sun); }
-.cal-flag[data-c='2'] { background: var(--px-teal); }
-.cal-flag[data-c='3'] { background: var(--px-purple); }
-
-.cal-pillar {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: clamp(24px, 5vw, 48px);
-  background: linear-gradient(90deg, #b9b6cc 0 30%, var(--px-stone) 30% 80%, #6f6c88 80%);
-  border-left: 4px solid var(--px-ink);
-  border-right: 4px solid var(--px-ink);
-}
-.cal-pillarLeft { left: 2%; }
-.cal-pillarRight { right: 2%; }
-
-.cal-wallTrim {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 14px;
-  background: var(--px-wood, #b07a4a);
-  border-top: 4px solid var(--px-ink);
-}
-
-.cal-floor {
-  position: absolute;
-  inset: 66% 0 0 0;
-  border-top: 4px solid var(--px-ink);
-  background: repeating-conic-gradient(#f4c07e 0 25%, #e6a764 0 50%) 0 0 / 48px 48px;
-  overflow: hidden;
-}
-
-.cal-sunPatch {
-  position: absolute;
-  top: 0;
-  left: 30%;
-  width: 40%;
-  height: 100%;
-  background: rgba(255, 244, 200, 0.35);
-  transform: skewX(-24deg);
-}
-
-.cal-plantLeft,
-.cal-plantRight {
-  position: absolute;
-  bottom: calc(34% - 24px);
-}
-.cal-plantLeft { left: calc(2% + clamp(24px, 5vw, 48px) + 6px); }
-.cal-plantRight { right: calc(2% + clamp(24px, 5vw, 48px) + 6px); }
 
 /* ---------- Foreground composition ---------- */
+/* Phone (portrait): board on top, atrium below, small attendee bottom-left. */
 .cal-foreground {
   position: relative;
   z-index: 1;
   height: 100%;
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 16px 16px 0;
-  display: flex;
-  flex-direction: column;
 }
 
 .cal-boardArea {
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  right: 16px;
+  height: 55%;
   display: flex;
   justify-content: center;
-  align-items: flex-end;
 }
 
 .cal-ground {
-  position: relative;
-  flex: none;
-  height: clamp(140px, 30svh, 260px);
-}
-
-.cal-posts {
   position: absolute;
-  inset: 0 0 18px;
-  max-width: 720px;
-  margin: 0 auto;
-}
-.cal-post {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 18px;
-  background: linear-gradient(90deg, #3d3566 0 35%, var(--px-ink) 35%);
-  border: 3px solid var(--px-ink);
-}
-.cal-post:nth-child(1) { left: 22%; }
-.cal-post:nth-child(2) { right: 22%; }
-
-.cal-postShadow {
-  position: absolute;
-  left: 50%;
-  bottom: 8px;
-  width: min(80%, 600px);
-  height: 14px;
-  transform: translateX(-50%);
-  background: rgba(27, 21, 48, 0.18);
+  left: 10px;
+  bottom: 6px;
+  height: 19%;
+  aspect-ratio: 16 / 24;
 }
 
 .cal-attendee {
   position: absolute;
-  left: 2%;
-  bottom: 10px;
-  height: calc(100% - 22px);
-  width: auto;
-  filter: drop-shadow(6px 6px 0 rgba(27, 21, 48, 0.2));
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(4px 4px 0 rgba(27, 21, 48, 0.25));
+}
+
+/* Wide: attendee fills the left third, board hangs in the middle third. */
+@media (min-width: 768px) {
+  .cal-boardArea {
+    top: 27%;
+    bottom: 5%;
+    left: 50%;
+    right: auto;
+    height: auto;
+    width: clamp(380px, 34vw, 560px);
+    transform: translateX(-50%);
+  }
+
+  .cal-ground {
+    left: max(16px, calc(16.5% - 21svh));
+    bottom: 0;
+    height: 64%;
+  }
+
+  .cal-attendee {
+    filter: drop-shadow(8px 8px 0 rgba(27, 21, 48, 0.22));
+  }
+
+  .cal-billboard::before,
+  .cal-billboard::after {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    width: 4px;
+    height: 100vh;
+    background: #8fa9b3;
+    border-left: 2px solid var(--px-ink);
+  }
+  .cal-billboard::before { left: 18%; }
+  .cal-billboard::after { right: 18%; }
 }
 
 /* ---------- Billboard ---------- */
 .cal-billboard {
+  position: relative;
   width: 100%;
   max-width: 720px;
   height: 100%;
