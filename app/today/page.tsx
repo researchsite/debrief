@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Sheet,
@@ -10,120 +10,107 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import type { TimelineEntry } from '@/lib/graph-writes';
+import {
+  Attendee,
+  Billboard,
+  HallBackdrop,
+  calendarStyles as styles,
+  dedupeEntries,
+  groupByDay,
+  type BoardState,
+} from '@/components/scenes/calendar';
 
 interface TodayApiResponse {
   timeline: TimelineEntry[];
   event: { eventName: string; primaryIntent: string } | null;
 }
 
-function relativeTime(ts: number): string {
-  const diff = Date.now() - ts;
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ago`;
+async function fetchToday(): Promise<TodayApiResponse> {
+  const res = await fetch('/api/today', { cache: 'no-store' });
+  if (!res.ok) throw new Error(`GET /api/today failed: ${res.status}`);
+  return (await res.json()) as TodayApiResponse;
 }
 
 export default function TodayPage() {
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [event, setEvent] = useState<{ eventName: string; primaryIntent: string } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState<BoardState>('loading');
   const [sheetOpen, setSheetOpen] = useState(false);
 
+  const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch('/api/today');
-        if (res.ok) {
-          const data = (await res.json()) as TodayApiResponse;
-          setTimeline(data.timeline ?? []);
-          setEvent(data.event ?? null);
-        }
-      } catch {
-        // ignore
-      } finally {
-        setLoading(false);
-      }
-    }
-    void load();
+    let cancelled = false;
+    fetchToday()
+      .then((data) => {
+        if (cancelled) return;
+        setTimeline(dedupeEntries(data.timeline ?? []));
+        setEvent(data.event ?? null);
+        setState('ready');
+      })
+      .catch(() => {
+        if (!cancelled) setState('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
+
+  const retry = useCallback(() => {
+    setState('loading');
+    setAttempt((n) => n + 1);
   }, []);
 
+  const sections = useMemo(() => groupByDay(timeline), [timeline]);
+
   return (
-    <div className="flex flex-col min-h-[80vh] px-4 py-6 space-y-4 max-w-[420px] mx-auto">
-      {/* Event status bar */}
-      {event && (
-        <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate">{event.eventName}</p>
+    <div className={styles.stage}>
+      <HallBackdrop />
+
+      <div className={styles.foreground}>
+        <div className={styles.boardArea}>
+          <Billboard state={state} event={event} sections={sections} onRetry={retry} />
+        </div>
+        <div className={styles.ground}>
+          <div className={styles.postShadow} aria-hidden />
+          <div className={styles.posts} aria-hidden>
+            <span className={styles.post} />
+            <span className={styles.post} />
           </div>
-          <span className="shrink-0 inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-xs font-medium capitalize">
-            {event.primaryIntent}
-          </span>
+          <Attendee className={styles.attendee} />
         </div>
-      )}
+      </div>
 
-      {/* Timeline header */}
-      <h1 className="text-xl font-bold tracking-tight">Today</h1>
-
-      {/* Loading state */}
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!loading && timeline.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <p className="text-muted-foreground text-sm">
-            Nothing captured yet today. Tap + to add your first person or talk.
-          </p>
-        </div>
-      )}
-
-      {/* Timeline entries */}
-      {!loading && timeline.length > 0 && (
-        <div className="space-y-3">
-          {timeline.map((entry, i) => (
-            <TimelineCard key={i} entry={entry} />
-          ))}
-        </div>
-      )}
-
-      {/* Floating "+" button with Sheet */}
+      {/* Floating "+" capture button with Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetTrigger
-          aria-label="Add capture"
-          className="fixed bottom-20 right-4 z-50 flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground text-2xl shadow-lg hover:bg-primary/80 transition-colors"
-        >
+        <SheetTrigger aria-label="Add capture" className={`px-btn ${styles.fab}`}>
           +
         </SheetTrigger>
-        <SheetContent side="bottom" className="rounded-t-2xl pb-8">
-          <SheetHeader className="mb-6">
-            <SheetTitle>Add capture</SheetTitle>
+        <SheetContent side="bottom" className="rounded-none border-t-4 border-[var(--px-ink)] bg-[var(--px-cream)] pb-8">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="font-pixel text-lg">Add capture</SheetTitle>
           </SheetHeader>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4 px-4">
             <Link
               href="/add-person"
               onClick={() => setSheetOpen(false)}
-              className="flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-4 text-left hover:bg-muted transition-colors"
+              className="px-panel flex items-center gap-4 px-4 py-3 text-left hover:bg-[var(--px-sun)]"
             >
               <span className="text-2xl" aria-hidden="true">👤</span>
               <div>
-                <p className="font-semibold text-sm">Add Person</p>
-                <p className="text-xs text-muted-foreground">Scan QR or enter LinkedIn URL</p>
+                <p className="font-pixel text-sm">Add Person</p>
+                <p className="font-pixel-body text-lg leading-none">Scan QR or enter LinkedIn URL</p>
               </div>
             </Link>
             <Link
               href="/add-talk"
               onClick={() => setSheetOpen(false)}
-              className="flex items-center gap-4 rounded-xl border border-border bg-card px-4 py-4 text-left hover:bg-muted transition-colors"
+              className="px-panel flex items-center gap-4 px-4 py-3 text-left hover:bg-[var(--px-sun)]"
             >
               <span className="text-2xl" aria-hidden="true">🎤</span>
               <div>
-                <p className="font-semibold text-sm">Add Talk</p>
-                <p className="text-xs text-muted-foreground">Notes + ideas from a session</p>
+                <p className="font-pixel text-sm">Add Talk</p>
+                <p className="font-pixel-body text-lg leading-none">Notes + ideas from a session</p>
               </div>
             </Link>
           </div>
@@ -131,34 +118,4 @@ export default function TodayPage() {
       </Sheet>
     </div>
   );
-}
-
-function TimelineCard({ entry }: { entry: TimelineEntry }) {
-  const timeLabel = relativeTime(entry.timestamp);
-
-  const cardContent = (
-    <div className="rounded-xl border border-border bg-card px-4 py-3 flex items-center gap-3 hover:bg-muted/50 transition-colors">
-      {/* Icon */}
-      <span className="text-lg shrink-0" aria-hidden="true">
-        {entry.type === 'person' ? '👤' : entry.type === 'talk' ? '🎤' : '🎟️'}
-      </span>
-
-      {/* Text */}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold truncate">{entry.title}</p>
-        {entry.subtitle && (
-          <p className="text-xs text-muted-foreground truncate">{entry.subtitle}</p>
-        )}
-      </div>
-
-      {/* Timestamp */}
-      <span className="shrink-0 text-xs text-muted-foreground">{timeLabel}</span>
-    </div>
-  );
-
-  if (entry.url) {
-    return <Link href={entry.url}>{cardContent}</Link>;
-  }
-
-  return cardContent;
 }

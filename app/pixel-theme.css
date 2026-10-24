@@ -1,0 +1,109 @@
+/* Pixel theme shared by every scene. */
+:root {
+  --px-ink: #1b1530;
+  --px-night: #2a2350;
+  --px-paper: #fff7e6;
+  --px-cream: #ffe9c2;
+  --px-sky: #7fd3ff;
+  --px-grass: #6bd66b;
+  --px-leaf: #2f9e5a;
+  --px-sun: #ffd23f;
+  --px-orange: #ff8c42;
+  --px-red: #ff4f5e;
+  --px-pink: #ff7ab6;
+  --px-purple: #8b5cf6;
+  --px-blue: #3b82f6;
+  --px-teal: #22c3b5;
+  --px-stone: #8c8aa3;
+  --px-unit: 4px;
+}
+
+.font-pixel {
+  font-family: var(--font-pixel), ui-monospace, monospace;
+}
+.font-pixel-body {
+  font-family: var(--font-pixel-body), ui-monospace, monospace;
+}
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Chunky stepped-corner panel */
+.px-panel {
+  background: var(--px-paper);
+  color: var(--px-ink);
+  border: var(--px-unit) solid var(--px-ink);
+  box-shadow: var(--px-unit) var(--px-unit) 0 0 var(--px-ink);
+  border-radius: 0;
+}
+.px-btn {
+  font-family: var(--font-pixel), ui-monospace, monospace;
+  background: var(--px-sun);
+  color: var(--px-ink);
+  border: var(--px-unit) solid var(--px-ink);
+  box-shadow: 0 var(--px-unit) 0 0 var(--px-ink);
+  padding: 0.5rem 1rem;
+  border-radius: 0;
+  cursor: pointer;
+  transition: transform 80ms steps(2), box-shadow 80ms steps(2);
+}
+.px-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+.px-btn:active:not(:disabled) {
+  transform: translateY(var(--px-unit));
+  box-shadow: 0 0 0 0 var(--px-ink);
+}
+.px-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.px-btn:focus-visible {
+  outline: 3px dashed var(--px-purple);
+  outline-offset: 3px;
+}
+.px-chip {
+  font-family: var(--font-pixel), ui-monospace, monospace;
+  display: inline-flex;
+  align-items: center;
+  border: 2px solid var(--px-ink);
+  padding: 0 0.4rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.px-label-sample {
+  font-family: var(--font-pixel), ui-monospace, monospace;
+  background: var(--px-orange);
+  color: var(--px-ink);
+  border: 2px solid var(--px-ink);
+  padding: 0 0.35rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+.px-loader {
+  width: 24px;
+  height: 24px;
+  background: var(--px-ink);
+  animation: px-blink 0.8s steps(2) infinite;
+}
+@keyframes px-blink {
+  50% { opacity: 0.2; transform: scale(0.6); }
+}
+
+/* Route transition: each page fades in from black */
+.px-page-fade-curtain {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+  z-index: 60;
+  animation: px-fade-from-black 420ms ease-out forwards;
+}
+@keyframes px-fade-from-black {
+  from { opacity: 1; }
+  to { opacity: 0; visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .px-page-fade-curtain { animation-duration: 1ms; }
+}
