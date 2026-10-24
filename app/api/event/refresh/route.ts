@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { extractEventFromUrl } from '@/lib/event-extract';
 import { getStoredEvent, getSessions, getMeetPlan } from '@/lib/graph-writes';
+import fs from 'fs';
+import path from 'path';
 
 export async function POST(): Promise<NextResponse> {
   try {
@@ -14,6 +16,22 @@ export async function POST(): Promise<NextResponse> {
     const extraction = await extractEventFromUrl(stored.url, 'debrief');
     const sessions = await getSessions('debrief');
     const meetPlan = await getMeetPlan('debrief');
+
+    // Keep local cache in sync with latest schedule
+    try {
+      const eventsDir = path.join(process.cwd(), '_private', 'events');
+      fs.mkdirSync(eventsDir, { recursive: true });
+      const slug = extraction.event.name
+        .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)
+        || new URL(stored.url).hostname.replace(/\./g, '-');
+      fs.writeFileSync(
+        path.join(eventsDir, `${slug}.json`),
+        JSON.stringify({ url: stored.url, savedAt: new Date().toISOString(), extraction }, null, 2),
+      );
+    } catch {
+      // Non-fatal
+    }
+
     return NextResponse.json({ ok: true, extraction, sessions, meetPlan });
   } catch (err) {
     console.error('[POST /api/event/refresh]', err);

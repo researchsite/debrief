@@ -39,31 +39,58 @@ function readFixtureRaw(filename: string): string {
 export async function fetchProfiles(urls: string[]): Promise<BDProfile[]> {
   if (isMock) {
     const fixtures = readFixture<BDProfile[]>('profile.json');
-    // Return one profile per url (cycle through fixtures)
     return urls.map((_, i) => fixtures[i % fixtures.length]);
   }
 
   const apiKey = process.env.BRIGHTDATA_API_KEY;
-  const response = await fetch(
+
+  // Submit batch job
+  const submitRes = await fetch(
     'https://api.brightdata.com/datasets/v3/scrape?dataset_id=gd_l1viktl72bvl7bjuj0&format=json',
     {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(urls.map((url) => ({ url }))),
     },
   );
 
-  if (!response.ok) {
-    throw new Error(
-      `Bright Data fetchProfiles failed: ${response.status} ${response.statusText}`,
-    );
+  if (!submitRes.ok) {
+    throw new Error(`Bright Data fetchProfiles submit failed: ${submitRes.status} ${submitRes.statusText}`);
   }
 
-  const data = (await response.json()) as BDProfile[];
-  return data;
+  const submitted = (await submitRes.json()) as { snapshot_id?: string };
+  const snapshotId = submitted.snapshot_id;
+
+  // If synchronous response (no snapshot_id), treat as direct result
+  if (!snapshotId) {
+    return submitted as unknown as BDProfile[];
+  }
+
+  // Poll until ready (max 60s)
+  for (let attempt = 0; attempt < 12; attempt++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const progressRes = await fetch(
+      `https://api.brightdata.com/datasets/v3/progress/${snapshotId}`,
+      { headers: { Authorization: `Bearer ${apiKey}` } },
+    );
+    const progress = (await progressRes.json()) as { status: string };
+    if (progress.status === 'ready') break;
+    if (progress.status === 'failed') {
+      throw new Error(`Bright Data snapshot ${snapshotId} failed`);
+    }
+  }
+
+  // Download results
+  const downloadRes = await fetch(
+    `https://api.brightdata.com/datasets/v3/snapshot/${snapshotId}?format=json`,
+    { headers: { Authorization: `Bearer ${apiKey}` } },
+  );
+
+  if (!downloadRes.ok) {
+    throw new Error(`Bright Data fetchProfiles download failed: ${downloadRes.status}`);
+  }
+
+  return (await downloadRes.json()) as BDProfile[];
 }
 
 /**
@@ -89,7 +116,7 @@ export async function serpSearch(
     body: JSON.stringify({
       zone,
       url: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
-      format: 'raw',
+      format: 'json',
     }),
   });
 
@@ -99,7 +126,8 @@ export async function serpSearch(
     );
   }
 
-  const html = await response.text();
+  const result = (await response.json()) as { status_code: number; body: string };
+  const html = result.body ?? '';
   return parseSerpHtml(html);
 }
 
@@ -124,7 +152,7 @@ export async function fetchPage(url: string): Promise<string> {
     body: JSON.stringify({
       zone,
       url,
-      format: 'raw',
+      format: 'json',
     }),
   });
 
@@ -134,42 +162,28 @@ export async function fetchPage(url: string): Promise<string> {
     );
   }
 
-  return response.text();
+  const result = (await response.json()) as { status_code: number; body: string };
+  return result.body ?? '';
 }
 
-/**
- * Parse top 5 SERP results from Google HTML.
- * This is a best-effort parser for the raw HTML response.
- */
-function parseSerpHtml(html: string): SerpResult[] {
-  const results: SerpResult[] = [];
+interface BDSerpOrganic {
+  link?: string;
+  title?: string;
+  description?: string;
+}
+interface BDSerpResponse {
+  organic?: BDSerpOrganic[];
+}
 
-  // Match <a href="..."><h3>...</h3></a> patterns typical in Google results
-  const linkPattern =
-    /<a[^>]+href="(https?:\/\/[^"]+)"[^>]*>[\s\S]*?<h3[^>]*>([\s\S]*?)<\/h3>/gi;
-  const snippetPattern = /<span[^>]*class="[^"]*st[^"]*"[^>]*>([\s\S]*?)<\/span>/gi;
-
-  let match: RegExpExecArray | null;
-  const snippets: string[] = [];
-
-  let snippetMatch: RegExpExecArray | null;
-  while ((snippetMatch = snippetPattern.exec(html)) !== null) {
-    snippets.push(snippetMatch[1].replace(/<[^>]+>/g, '').trim());
+function parseSerpHtml(body: string): SerpResult[] {
+  try {
+    const parsed = JSON.parse(body) as BDSerpResponse;
+    return (parsed.organic ?? []).slice(0, 5).map((r) => ({
+      url: r.link ?? '',
+      title: r.title ?? '',
+      snippet: r.description ?? '',
+    }));
+  } catch {
+    return [];
   }
-
-  let idx = 0;
-  while ((match = linkPattern.exec(html)) !== null && results.length < 5) {
-    const url = match[1];
-    const title = match[2].replace(/<[^>]+>/g, '').trim();
-    if (url && title) {
-      results.push({
-        url,
-        title,
-        snippet: snippets[idx] ?? '',
-      });
-      idx++;
-    }
-  }
-
-  return results.slice(0, 5);
 }
