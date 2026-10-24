@@ -48,17 +48,21 @@ export async function writeSetup(
     graphName,
   );
 
-  // Create/update Intent nodes and relationships
+  // Create/update Intent nodes and relationships.
+  // primary flag is stored on the HAS_INTENT relationship (not the shared Intent node)
+  // to keep each user's primary independent of others sharing the same intent.
   for (const intent of intents) {
     const isPrimary = intent === primaryIntent;
     await query(
-      'MERGE (i:Intent {name: $intent}) SET i.primary = $isPrimary',
-      { intent, isPrimary },
+      'MERGE (i:Intent {name: $intent})',
+      { intent },
       graphName,
     );
     await query(
-      'MATCH (me:Me {linkedin_url: $url}) MATCH (i:Intent {name: $intent}) MERGE (me)-[:HAS_INTENT]->(i)',
-      { url: linkedinUrl, intent },
+      `MATCH (me:Me {linkedin_url: $url}) MATCH (i:Intent {name: $intent})
+       MERGE (me)-[r:HAS_INTENT]->(i)
+       SET r.primary = $isPrimary`,
+      { url: linkedinUrl, intent, isPrimary },
       graphName,
     );
   }
@@ -78,6 +82,13 @@ export async function writeLinkedInArchive(
   graphName?: string,
 ): Promise<void> {
   const { headline, currentCompany, pastCompanies, schools, skills } = archive;
+
+  // Upsert Me node to ensure it exists even if called before writeSetup.
+  await query(
+    'MERGE (me:Me {linkedin_url: $url})',
+    { url: linkedinUrl },
+    graphName,
+  );
 
   // Update headline
   if (headline !== undefined) {

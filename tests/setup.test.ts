@@ -38,7 +38,7 @@ describe('writeSetup', () => {
     expect(r.data![0].role).toBe('Test Engineer');
 
     const intents = await roQuery(
-      'MATCH (me:Me {linkedin_url: $url})-[:HAS_INTENT]->(i:Intent) RETURN i.name AS name, i.primary AS primary',
+      'MATCH (me:Me {linkedin_url: $url})-[r:HAS_INTENT]->(i:Intent) RETURN i.name AS name, r.primary AS primary',
       { url: ME_URL }, G
     );
     expect(intents.data!).toHaveLength(2);
