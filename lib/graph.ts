@@ -7,6 +7,9 @@ export type QueryResult = GraphReply<Record<string, unknown>>;
 
 const host = process.env.FALKORDB_HOST ?? 'localhost';
 const port = parseInt(process.env.FALKORDB_PORT ?? '6379', 10);
+const username = process.env.FALKORDB_USERNAME;
+const password = process.env.FALKORDB_PASSWORD;
+const ssl = process.env.FALKORDB_SSL === 'true';
 
 // Cache only the DB connection — never cache the Graph handle.
 // The Graph object tracks server schema version; caching it causes
@@ -18,7 +21,13 @@ async function getDb(): Promise<FalkorDB> {
   if (!dbClient) {
     const url = process.env.FALKORDB_URL;
     dbClient = await FalkorDB.connect(
-      url ? { url } : { socket: { host, port } },
+      url
+        ? { url }
+        : {
+            socket: { host, port, tls: ssl },
+            ...(username && { username }),
+            ...(password && { password }),
+          },
     );
   }
   return dbClient;
