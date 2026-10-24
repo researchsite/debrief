@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractEventFromUrl, type EventExtraction } from '@/lib/event-extract';
-import { getMeetPlan, type MeetPlanEntry } from '@/lib/graph-writes';
+import { getMeetPlan, getStoredEvent, getSessions, type MeetPlanEntry } from '@/lib/graph-writes';
+
+export async function GET(): Promise<NextResponse> {
+  try {
+    const event = await getStoredEvent('debrief');
+    const sessions = await getSessions('debrief');
+    const meetPlan = await getMeetPlan('debrief');
+    return NextResponse.json({ ok: true, event, sessions, meetPlan });
+  } catch (err) {
+    return NextResponse.json(
+      { ok: false, error: err instanceof Error ? err.message : 'Internal server error' },
+      { status: 500 },
+    );
+  }
+}
 
 interface RequestBody {
   url: string;
