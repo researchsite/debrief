@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
-  serverExternalPackages: ['falkordb'],
+  serverExternalPackages: ['falkordb', 'pdf-parse'],
   turbopack: {
     rules: {
       "*.css": {
