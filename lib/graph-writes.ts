@@ -252,6 +252,90 @@ export async function getCommonGround(personUrl: string, graphName?: string): Pr
   };
 }
 
+// ────────────────────────────────────────────────────────────
+// Context (AI-generated research) graph writes
+// ────────────────────────────────────────────────────────────
+
+export interface ContextBullet {
+  text: string;
+  source_url: string;
+}
+
+export interface ContextInput {
+  personUrl: string;
+  summary: string;
+  bullets: ContextBullet[];
+  sources: { url: string; title: string }[];
+}
+
+export async function writeContext(input: ContextInput, graphName?: string): Promise<void> {
+  const { personUrl, summary, bullets, sources } = input;
+  const fetchedAt = Date.now();
+
+  // 1. Create/replace Context node
+  await query(
+    `MATCH (p:Person {linkedin_url: $url})
+     MERGE (p)-[:HAS_CONTEXT]->(ctx:Context)
+     SET ctx.summary = $summary,
+         ctx.bullets = $bullets,
+         ctx.fetched_at = $fetchedAt`,
+    { url: personUrl, summary, bullets: JSON.stringify(bullets), fetchedAt },
+    graphName,
+  );
+
+  // 2. Source citations
+  for (const src of sources) {
+    await query(
+      `MATCH (p:Person {linkedin_url: $url})-[:HAS_CONTEXT]->(ctx:Context)
+       MERGE (src:Source {url: $srcUrl})
+       SET src.title = $srcTitle
+       MERGE (ctx)-[:CITES]->(src)`,
+      { url: personUrl, srcUrl: src.url, srcTitle: src.title },
+      graphName,
+    );
+  }
+}
+
+export interface ContextResult {
+  summary: string;
+  bullets: ContextBullet[];
+  fetched_at: number;
+  sources: { url: string; title: string }[];
+}
+
+export async function getContext(personUrl: string, graphName?: string): Promise<ContextResult | null> {
+  const result = await roQuery(
+    `MATCH (p:Person {linkedin_url: $url})-[:HAS_CONTEXT]->(ctx:Context)
+     OPTIONAL MATCH (ctx)-[:CITES]->(src:Source)
+     RETURN ctx.summary AS summary, ctx.bullets AS bullets, ctx.fetched_at AS fetched_at,
+            collect({ url: src.url, title: src.title }) AS sources`,
+    { url: personUrl },
+    graphName,
+  );
+
+  const row = result.data?.[0];
+  if (!row || row.summary == null) return null;
+
+  let bullets: ContextBullet[] = [];
+  try {
+    bullets = JSON.parse(String(row.bullets ?? '[]')) as ContextBullet[];
+  } catch {
+    bullets = [];
+  }
+
+  // Filter out null/empty sources that come from OPTIONAL MATCH when no src exists
+  const sources = ((row.sources as { url: string; title: string }[]) ?? []).filter(
+    (s) => s.url != null,
+  );
+
+  return {
+    summary: String(row.summary ?? ''),
+    bullets,
+    fetched_at: Number(row.fetched_at ?? 0),
+    sources,
+  };
+}
+
 export async function writeLinkedInArchive(
   linkedinUrl: string,
   archive: LinkedInArchive,

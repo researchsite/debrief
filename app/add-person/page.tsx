@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
+import Link from 'next/link';
 import { Switch } from '@/components/ui/switch';
 
 // CommonGround mirrors lib/graph-writes.ts
@@ -233,6 +234,12 @@ export default function AddPersonPage() {
           <p className="font-semibold text-foreground">{person.name}</p>
           <p className="text-sm text-muted-foreground">{person.headline}</p>
           <p className="text-xs text-muted-foreground">{person.city}</p>
+          <Link
+            href={`/person/${btoa(person.linkedin_url)}`}
+            className="inline-block mt-2 text-sm text-primary underline hover:text-primary/80"
+          >
+            View full profile →
+          </Link>
         </div>
 
         {/* Common ground */}
