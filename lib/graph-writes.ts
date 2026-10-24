@@ -898,6 +898,298 @@ export async function getEventSummary(graphName?: string): Promise<{ eventName: 
   };
 }
 
+// ────────────────────────────────────────────────────────────
+// Recap data types + queries (M9)
+// ────────────────────────────────────────────────────────────
+
+export interface RecapCounts {
+  peopleMet: number;
+  sessionsSaw: number;
+  ideas: number;
+  connectedAndMet: number; // Me-CONNECTED-Person who I also MET
+}
+
+export interface RecapPerson {
+  name: string;
+  headline: string;
+  linkedinUrl: string;
+  company: string;
+  noteText: string;
+  contextBullets: ContextBullet[];
+  contextFetched?: number;
+}
+
+export interface RecapIdea {
+  text: string;
+  sessionTitle: string;
+  topics: string[];
+}
+
+export interface FollowUpDraft {
+  personName: string;
+  personUrl: string;
+  company: string;
+  message: string;
+  noteSource: string;
+  contextSource: string;
+}
+
+export async function getRecapCounts(graphName?: string): Promise<RecapCounts> {
+  const [metR, sawR, ideasR, connMetR] = await Promise.all([
+    roQuery('MATCH (me:Me)-[:MET]->(p:Person) RETURN count(p) AS cnt', {}, graphName),
+    roQuery('MATCH (me:Me)-[:SAW]->(s:Session) RETURN count(s) AS cnt', {}, graphName),
+    roQuery('MATCH (me:Me)-[:SAW]->(s:Session)-[:SPARKED]->(i:Idea) RETURN count(i) AS cnt', {}, graphName),
+    roQuery('MATCH (me:Me)-[:CONNECTED]->(p:Person)<-[:MET]-(me) RETURN count(p) AS cnt', {}, graphName),
+  ]);
+
+  return {
+    peopleMet: Number(metR.data?.[0]?.cnt ?? 0),
+    sessionsSaw: Number(sawR.data?.[0]?.cnt ?? 0),
+    ideas: Number(ideasR.data?.[0]?.cnt ?? 0),
+    connectedAndMet: Number(connMetR.data?.[0]?.cnt ?? 0),
+  };
+}
+
+export async function getRecapPeopleForIntent(
+  intent: string,
+  graphName?: string,
+): Promise<RecapPerson[]> {
+  let result;
+
+  if (intent === 'job_hunt') {
+    result = await roQuery(
+      `MATCH (me:Me)-[:WANTS]->(r:Role)<-[:HIRING]-(c:Company)<-[:WORKS_AT]-(p:Person)<-[:MET]-(me)
+       OPTIONAL MATCH (p)-[:HAS_NOTE]->(n:Note)
+       OPTIONAL MATCH (p)-[:HAS_CONTEXT]->(ctx:Context)
+       RETURN p.name AS name, p.headline AS headline, p.linkedin_url AS linkedinUrl,
+              c.name AS company, n.text AS noteText, ctx.bullets AS ctxBullets,
+              ctx.fetched_at AS ctxFetched
+       LIMIT 10`,
+      {},
+      graphName,
+    );
+  } else if (intent === 'learning') {
+    result = await roQuery(
+      `MATCH (me:Me)-[:SAW]->(s:Session)<-[:SPEAKS_AT]-(p:Person)
+       OPTIONAL MATCH (me)-[:MET]->(p)
+       OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
+       OPTIONAL MATCH (p)-[:HAS_NOTE]->(n:Note)
+       OPTIONAL MATCH (p)-[:HAS_CONTEXT]->(ctx:Context)
+       RETURN p.name AS name, p.headline AS headline, p.linkedin_url AS linkedinUrl,
+              c.name AS company, n.text AS noteText, ctx.bullets AS ctxBullets,
+              ctx.fetched_at AS ctxFetched
+       LIMIT 10`,
+      {},
+      graphName,
+    );
+  } else {
+    result = await roQuery(
+      `MATCH (me:Me)-[:MET]->(p:Person)-[:WORKS_AT]->(c:Company)
+       OPTIONAL MATCH (p)-[:HAS_NOTE]->(n:Note)
+       OPTIONAL MATCH (p)-[:HAS_CONTEXT]->(ctx:Context)
+       RETURN p.name AS name, p.headline AS headline, p.linkedin_url AS linkedinUrl,
+              c.name AS company, n.text AS noteText, ctx.bullets AS ctxBullets,
+              ctx.fetched_at AS ctxFetched
+       LIMIT 10`,
+      {},
+      graphName,
+    );
+  }
+
+  return (result.data ?? []).map((row: Record<string, unknown>) => {
+    let contextBullets: ContextBullet[] = [];
+    try {
+      contextBullets = JSON.parse(String(row.ctxBullets ?? '[]')) as ContextBullet[];
+    } catch {
+      contextBullets = [];
+    }
+    return {
+      name: String(row.name ?? ''),
+      headline: String(row.headline ?? ''),
+      linkedinUrl: String(row.linkedinUrl ?? ''),
+      company: String(row.company ?? ''),
+      noteText: String(row.noteText ?? ''),
+      contextBullets,
+      contextFetched: row.ctxFetched != null ? Number(row.ctxFetched) : undefined,
+    };
+  });
+}
+
+export async function getRecapIdeas(graphName?: string): Promise<RecapIdea[]> {
+  const result = await roQuery(
+    `MATCH (me:Me)-[:SAW]->(s:Session)-[:SPARKED]->(i:Idea)
+     OPTIONAL MATCH (i)-[:ABOUT]->(t:Topic)
+     RETURN i.text AS text, s.title AS sessionTitle, collect(t.name) AS topics`,
+    {},
+    graphName,
+  );
+
+  return (result.data ?? []).map((row: Record<string, unknown>) => ({
+    text: String(row.text ?? ''),
+    sessionTitle: String(row.sessionTitle ?? ''),
+    topics: Array.isArray(row.topics) ? (row.topics as string[]) : [],
+  }));
+}
+
+export async function saveFollowUp(fu: FollowUpDraft, graphName?: string): Promise<void> {
+  await query(
+    `MATCH (me:Me) MATCH (p:Person {linkedin_url: $url})
+     MERGE (f:FollowUp {message: $message}) SET f.status = 'todo',
+       f.note_source = $noteSource, f.context_source = $contextSource
+     MERGE (me)-[:FOLLOW_UP]->(f)
+     MERGE (f)-[:FOR]->(p)`,
+    {
+      url: fu.personUrl,
+      message: fu.message,
+      noteSource: fu.noteSource,
+      contextSource: fu.contextSource,
+    },
+    graphName,
+  );
+}
+
+export async function getFollowUps(
+  graphName?: string,
+): Promise<(FollowUpDraft & { status: string })[]> {
+  const result = await roQuery(
+    `MATCH (me:Me)-[:FOLLOW_UP]->(f:FollowUp)-[:FOR]->(p:Person)
+     OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
+     RETURN p.name AS personName, p.linkedin_url AS personUrl, c.name AS company,
+            f.message AS message, f.status AS status,
+            f.note_source AS noteSource, f.context_source AS contextSource`,
+    {},
+    graphName,
+  );
+
+  return (result.data ?? []).map((row: Record<string, unknown>) => ({
+    personName: String(row.personName ?? ''),
+    personUrl: String(row.personUrl ?? ''),
+    company: String(row.company ?? ''),
+    message: String(row.message ?? ''),
+    status: String(row.status ?? 'todo'),
+    noteSource: String(row.noteSource ?? ''),
+    contextSource: String(row.contextSource ?? ''),
+  }));
+}
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: string;
+}
+
+export interface GraphLink {
+  source: string;
+  target: string;
+  label: string;
+}
+
+export interface GraphPath {
+  nodes: GraphNode[];
+  links: GraphLink[];
+}
+
+export async function getWhyPath(personName: string, graphName?: string): Promise<GraphPath> {
+  // Use a fallback approach: query 1-hop and 2-hop neighbors separately
+  // to avoid complex path parsing from FalkorDB
+  const nodesMap = new Map<string, GraphNode>();
+  const linksSet = new Set<string>();
+  const links: GraphLink[] = [];
+
+  // Get the Me node
+  const meResult = await roQuery(
+    'MATCH (me:Me) RETURN id(me) AS nid, me.name AS name, labels(me) AS lbls LIMIT 1',
+    {},
+    graphName,
+  );
+  const meRow = meResult.data?.[0];
+  if (!meRow) return { nodes: [], links: [] };
+  const meId = String(meRow.nid ?? '0');
+  const meName = String(meRow.name ?? 'Me');
+  nodesMap.set(meId, { id: meId, label: meName, type: 'Me' });
+
+  // Get the target person node
+  const personResult = await roQuery(
+    'MATCH (p:Person {name: $name}) RETURN id(p) AS nid, p.name AS pname, labels(p) AS lbls LIMIT 1',
+    { name: personName },
+    graphName,
+  );
+  const personRow = personResult.data?.[0];
+  if (!personRow) return { nodes: [nodesMap.get(meId)!], links: [] };
+  const personId = String(personRow.nid ?? '1');
+  nodesMap.set(personId, { id: personId, label: personName, type: 'Person' });
+
+  // Get direct relationships between Me and Person
+  const directResult = await roQuery(
+    `MATCH (me:Me)-[r]->(p:Person {name: $name})
+     RETURN type(r) AS relType, id(me) AS srcId, id(p) AS dstId`,
+    { name: personName },
+    graphName,
+  );
+  for (const row of (directResult.data ?? []) as Record<string, unknown>[]) {
+    const key = `${row.srcId}-${row.relType}-${row.dstId}`;
+    if (!linksSet.has(key)) {
+      linksSet.add(key);
+      links.push({ source: String(row.srcId), target: String(row.dstId), label: String(row.relType ?? '') });
+    }
+  }
+
+  // Get 2-hop neighbors of target person (companies, schools, topics, sessions)
+  const neighborResult = await roQuery(
+    `MATCH (p:Person {name: $name})-[r]->(n)
+     WHERE NOT n:Me
+     RETURN id(p) AS srcId, type(r) AS relType, id(n) AS dstId,
+            labels(n) AS lbls, n.name AS nname, n.title AS ntitle, n.text AS ntext
+     LIMIT 20`,
+    { name: personName },
+    graphName,
+  );
+  for (const row of (neighborResult.data ?? []) as Record<string, unknown>[]) {
+    const nid = String(row.dstId ?? '');
+    if (!nodesMap.has(nid)) {
+      const lbls = Array.isArray(row.lbls) ? (row.lbls as string[]) : [];
+      const nodeType = lbls[0] ?? 'Unknown';
+      const nodeLabel = String(row.nname ?? row.ntitle ?? row.ntext ?? nodeType);
+      nodesMap.set(nid, { id: nid, label: nodeLabel, type: nodeType });
+    }
+    const key = `${row.srcId}-${row.relType}-${row.dstId}`;
+    if (!linksSet.has(key)) {
+      linksSet.add(key);
+      links.push({ source: String(row.srcId), target: String(row.dstId), label: String(row.relType ?? '') });
+    }
+  }
+
+  // Also get neighbors of Me that connect to Person's company (warm intro paths)
+  const meNeighborResult = await roQuery(
+    `MATCH (me:Me)-[r]->(n)
+     WHERE NOT n:Person OR n.name = $name
+     RETURN id(me) AS srcId, type(r) AS relType, id(n) AS dstId,
+            labels(n) AS lbls, n.name AS nname, n.title AS ntitle, n.text AS ntext
+     LIMIT 20`,
+    { name: personName },
+    graphName,
+  );
+  for (const row of (meNeighborResult.data ?? []) as Record<string, unknown>[]) {
+    const nid = String(row.dstId ?? '');
+    if (!nodesMap.has(nid)) {
+      const lbls = Array.isArray(row.lbls) ? (row.lbls as string[]) : [];
+      const nodeType = lbls[0] ?? 'Unknown';
+      const nodeLabel = String(row.nname ?? row.ntitle ?? row.ntext ?? nodeType);
+      nodesMap.set(nid, { id: nid, label: nodeLabel, type: nodeType });
+    }
+    const key = `${row.srcId}-${row.relType}-${row.dstId}`;
+    if (!linksSet.has(key)) {
+      linksSet.add(key);
+      links.push({ source: String(row.srcId), target: String(row.dstId), label: String(row.relType ?? '') });
+    }
+  }
+
+  return {
+    nodes: Array.from(nodesMap.values()),
+    links,
+  };
+}
+
 export async function writeLinkedInArchive(
   linkedinUrl: string,
   archive: LinkedInArchive,
