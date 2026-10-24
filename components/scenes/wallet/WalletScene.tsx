@@ -1,289 +1,284 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore, type CSSProperties } from 'react';
 import type { CouponData } from '@/lib/graph-writes';
-import { PX, PixelSprite } from '@/components/pixel';
-import { CouponTicket } from './CouponTicket';
+import { useSceneProgress } from '@/components/pixel';
+import { LeafLining, WalletPage, type PageContext, type PageSpec, type SpineSide, type WalletStatus } from './WalletPages';
 
-const TURN_MS = 450;
+export type { WalletStatus } from './WalletPages';
+
 const WIDE_QUERY = '(min-width: 640px)';
+const REDUCED_QUERY = '(prefers-reduced-motion: reduce)';
+/** Blank card-slot pages between the inside cover and the first coupon. */
+const BLANK_PAGES = 2;
+const FIRST_CONTENT_PAGE = 1 + BLANK_PAGES;
+/** Progress units per pixel of wheel delta; ~330px of scroll turns one page. */
+const SENSITIVITY = 0.003;
+/** Fraction of a page a gesture must move to commit to the next page. */
+const COMMIT = 0.12;
 
-function subscribeWide(cb: () => void) {
-  const mq = window.matchMedia(WIDE_QUERY);
-  mq.addEventListener('change', cb);
-  return () => mq.removeEventListener('change', cb);
-}
-
-function useWide(): boolean {
+function useMedia(query: string, server: boolean): boolean {
   return useSyncExternalStore(
-    subscribeWide,
-    () => window.matchMedia(WIDE_QUERY).matches,
-    () => true,
+    (cb) => {
+      const mq = window.matchMedia(query);
+      mq.addEventListener('change', cb);
+      return () => mq.removeEventListener('change', cb);
+    },
+    () => window.matchMedia(query).matches,
+    () => server,
   );
 }
-
-const COIN = [
-  '..kkkk..',
-  '.kyyyyk.',
-  'kyywyyyk',
-  'kywyyoyk',
-  'kyyyyoyk',
-  'kyyyooyk',
-  '.kyooyk.',
-  '..kkkk..',
-];
-const COIN_PALETTE = { k: PX.ink, y: PX.sun, w: PX.white, o: PX.orange };
-
-export type WalletStatus = 'loading' | 'error' | 'ready';
 
 export interface WalletSceneProps {
   status: WalletStatus;
   items: CouponData[];
-  filtered: boolean;
+  /** Current search text; a new query jumps to the first coupon page. */
+  query: string;
+  eventName: string | null;
   copiedCode: string | null;
   onCopy: (code: string) => void;
   onMarkUsed: (code: string) => void;
   onRetry: () => void;
 }
 
-type Side = 'a' | 'b';
+const SHADE = 'rgba(27,21,48,0.6)';
 
-/** An open pixel-art bifold wallet; each spread holds two tickets and pages turn around the spine. */
-export function WalletScene({ status, items, filtered, copiedCode, onCopy, onMarkUsed, onRetry }: WalletSceneProps) {
-  const wide = useWide();
-  const spreadCount = Math.max(1, Math.ceil(items.length / 2));
-  const [rawSpread, setSpread] = useState(0);
-  const spread = Math.min(rawSpread, spreadCount - 1);
-  const [turn, setTurn] = useState<1 | -1 | null>(null);
-  const leafRef = useRef<HTMLDivElement | null>(null);
-  const sceneRef = useRef<HTMLDivElement | null>(null);
-  const turnRef = useRef(turn);
-  const lastFlip = useRef(0);
+/**
+ * An open pixel-art wallet whose leaves turn around the spine. Vertical scroll
+ * or swipe scrubs the turn continuously; it settles on the nearest page.
+ * Wide screens show a two-page spread, phones one page at a time.
+ */
+export function WalletScene({
+  status,
+  items,
+  query,
+  eventName,
+  copiedCode,
+  onCopy,
+  onMarkUsed,
+  onRetry,
+}: WalletSceneProps) {
+  const wide = useMedia(WIDE_QUERY, true);
+  const reduced = useMedia(REDUCED_QUERY, false);
 
-  useEffect(() => {
-    turnRef.current = turn;
-  }, [turn]);
+  const pages = useMemo<PageSpec[]>(() => {
+    const list: PageSpec[] = [{ kind: 'cover' }];
+    for (let i = 0; i < BLANK_PAGES; i++) list.push({ kind: 'slots', key: `slots-${i}` });
+    if (status === 'ready' && items.length > 0) {
+      for (const coupon of items) list.push({ kind: 'coupon', coupon });
+    } else {
+      list.push({ kind: 'message' });
+    }
+    return list;
+  }, [status, items]);
 
-  const flip = useCallback(
-    (dir: 1 | -1) => {
-      if (turnRef.current !== null) return;
-      const next = spread + dir;
-      if (next < 0 || next >= spreadCount) return;
-      lastFlip.current = Date.now();
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        setSpread(next);
-        return;
-      }
-      turnRef.current = dir;
-      setTurn(dir);
-    },
-    [spread, spreadCount],
+  // Wide screens pair pages into spreads; pad with a blank back pocket.
+  const spreadPages = useMemo<PageSpec[]>(
+    () => (pages.length % 2 === 0 ? pages : [...pages, { kind: 'slots', key: 'slots-back' }]),
+    [pages],
   );
+  const stops = wide ? spreadPages.length / 2 : pages.length;
 
-  // Run the page-turn animation whenever a turn starts.
+  const { ref, value, target, setTarget } = useSceneProgress<HTMLDivElement>({
+    min: 0,
+    max: stops - 1,
+    sensitivity: SENSITIVITY,
+    damping: 0.1,
+  });
+
+  // Directional snap: once input pauses, commit to the page the gesture was heading for.
+  const restRef = useRef(0);
+  const settle = useCallback(() => {
+    setTarget((prev) => {
+      const base = Math.floor(prev);
+      const frac = prev - base;
+      const dir = Math.sign(prev - restRef.current);
+      let next: number;
+      if (dir > 0) next = frac > COMMIT ? base + 1 : base;
+      else if (dir < 0) next = frac < 1 - COMMIT ? base : base + 1;
+      else next = Math.round(prev);
+      next = Math.min(stops - 1, Math.max(0, next));
+      restRef.current = next;
+      return next;
+    });
+  }, [setTarget, stops]);
+
   useEffect(() => {
-    const el = leafRef.current;
-    if (turn === null || !el) return;
-    const axis = wide ? 'rotateY' : 'rotateX';
-    const end = wide ? (turn === 1 ? -180 : 180) : turn === 1 ? 180 : -180;
-    const anim = el.animate(
-      [{ transform: `${axis}(0deg)` }, { transform: `${axis}(${end}deg)` }],
-      { duration: TURN_MS, easing: 'cubic-bezier(0.45, 0, 0.25, 1)', fill: 'forwards' },
-    );
-    let cancelled = false;
-    anim.finished
-      .then(() => {
-        if (cancelled) return;
-        setSpread((s) => s + turn);
-        setTurn(null);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-      anim.cancel();
+    const el = ref.current;
+    if (!el) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = (ms: number) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(settle, ms);
     };
-  }, [turn, wide]);
+    const onWheel = () => schedule(160);
+    const onTouchEnd = () => schedule(40);
+    el.addEventListener('wheel', onWheel, { passive: true });
+    el.addEventListener('touchend', onTouchEnd);
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchend', onTouchEnd);
+      if (timer) clearTimeout(timer);
+    };
+  }, [ref, settle]);
+
+  const goTo = useCallback(
+    (stop: number) => {
+      const next = Math.min(stops - 1, Math.max(0, stop));
+      restRef.current = next;
+      setTarget(next);
+    },
+    [setTarget, stops],
+  );
+  const step = useCallback((dir: 1 | -1) => goTo(Math.round(restRef.current) + dir), [goTo]);
+
+  // Keep the same page in view when the layout switches between spread and single page.
+  const prevWide = useRef(wide);
+  useEffect(() => {
+    if (prevWide.current === wide) return;
+    prevWide.current = wide;
+    const cur = restRef.current;
+    goTo(wide ? Math.floor(cur / 2) : cur * 2);
+  }, [wide, goTo]);
+
+  // A new search jumps to the first coupon page.
+  const prevQuery = useRef(query);
+  useEffect(() => {
+    if (prevQuery.current === query) return;
+    prevQuery.current = query;
+    goTo(wide ? Math.floor(FIRST_CONTENT_PAGE / 2) : FIRST_CONTENT_PAGE);
+  }, [query, wide, goTo]);
 
   // Keyboard arrows.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'PageDown') {
         e.preventDefault();
-        flip(1);
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        step(1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'PageUp') {
         e.preventDefault();
-        flip(-1);
+        step(-1);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [flip]);
+  }, [step]);
 
-  // Wheel and swipe: one flip per gesture.
-  useEffect(() => {
-    const el = sceneRef.current;
-    if (!el) return;
-    let acc = 0;
-    let accTimer: ReturnType<typeof setTimeout> | null = null;
-    let startX = 0;
-    let startY = 0;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      if (Date.now() - lastFlip.current < TURN_MS + 250) return;
-      acc += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-      if (accTimer) clearTimeout(accTimer);
-      accTimer = setTimeout(() => (acc = 0), 200);
-      if (Math.abs(acc) > 40) {
-        flip(acc > 0 ? 1 : -1);
-        acc = 0;
-      }
-    };
-    const onTouchStart = (e: TouchEvent) => {
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-    };
-    const onTouchEnd = (e: TouchEvent) => {
-      const t = e.changedTouches[0];
-      const dx = startX - t.clientX;
-      const dy = startY - t.clientY;
-      const d = Math.abs(dx) > Math.abs(dy) ? dx : dy;
-      if (Math.abs(d) > 45) flip(d > 0 ? 1 : -1);
-    };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    el.addEventListener('touchstart', onTouchStart, { passive: true });
-    el.addEventListener('touchend', onTouchEnd);
-    return () => {
-      el.removeEventListener('wheel', onWheel);
-      el.removeEventListener('touchstart', onTouchStart);
-      el.removeEventListener('touchend', onTouchEnd);
-      if (accTimer) clearTimeout(accTimer);
-    };
-  }, [flip]);
-
-  const at = (i: number): CouponData | undefined => items[i];
-  const cur = spread * 2;
-
-  let underA = at(cur);
-  let underB = at(cur + 1);
-  let leafFront: { item?: CouponData; side: Side } | null = null;
-  let leafBack: { item?: CouponData; side: Side } | null = null;
-  if (turn === 1) {
-    underB = at(cur + 3);
-    leafFront = { item: at(cur + 1), side: 'b' };
-    leafBack = { item: at(cur + 2), side: 'a' };
-  } else if (turn === -1) {
-    underA = at(cur - 2);
-    leafFront = { item: at(cur), side: 'a' };
-    leafBack = { item: at(cur - 1), side: 'b' };
-  }
-
-  const renderItem = (item: CouponData | undefined, side: Side): ReactNode => {
-    if (status === 'loading') {
-      return side === 'a' ? <LoadingCard /> : <EmptySlot />;
-    }
-    if (status === 'error') {
-      return side === 'a' ? <ErrorCard onRetry={onRetry} /> : <EmptySlot />;
-    }
-    if (items.length === 0) {
-      return side === 'a' ? <EmptySlot sprite /> : <EmptyCard filtered={filtered} />;
-    }
-    if (!item) return <EmptySlot />;
-    return (
-      <CouponTicket
-        coupon={item}
-        copied={copiedCode === item.code}
-        onCopy={onCopy}
-        onMarkUsed={onMarkUsed}
-      />
-    );
+  const ctx: PageContext = {
+    status,
+    count: items.length,
+    filtered: query.trim().length > 0,
+    eventName,
+    copiedCode,
+    onCopy,
+    onMarkUsed,
+    onRetry,
   };
 
-  const leafOnB = turn === 1;
-  const leafStyle: React.CSSProperties = wide
-    ? {
-        top: 0,
-        bottom: 0,
-        width: '50%',
-        left: leafOnB ? '50%' : 0,
-        transformOrigin: leafOnB ? 'left center' : 'right center',
-      }
-    : {
-        left: 0,
-        right: 0,
-        height: '50%',
-        top: leafOnB ? '50%' : 0,
-        transformOrigin: leafOnB ? 'center top' : 'center bottom',
-      };
+  const shown = Math.min(stops - 1, Math.max(0, reduced ? Math.round(target) : value));
+  let base = Math.floor(shown);
+  let frac = shown - base;
+  if (frac < 0.002) frac = 0;
+  else if (frac > 0.998) {
+    base += 1;
+    frac = 0;
+  }
+  const turning = frac > 0;
+  const angle = frac * 180;
+  // Leaf darkens as it approaches edge-on (90deg); the page underneath gets the leaf's shadow.
+  const frontShade = Math.min(1, angle / 90) * 0.85;
+  const backShade = Math.min(1, (180 - angle) / 90) * 0.85;
+  const castShadow = Math.sin(frac * Math.PI) * 0.7;
+  const current = Math.min(stops - 1, Math.round(target));
 
-  const interactive = status === 'ready' && items.length > 0;
+  const page = (i: number, spine: SpineSide) => {
+    const list = wide ? spreadPages : pages;
+    const spec = list[i];
+    if (!spec) return null;
+    return <WalletPage spec={spec} spine={spine} ctx={ctx} />;
+  };
+
+  const leafStyle: CSSProperties = {
+    transform: `rotateY(${-angle}deg)`,
+    transformOrigin: 'left center',
+    transformStyle: 'preserve-3d',
+    willChange: 'transform',
+  };
+  const face: CSSProperties = { backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center gap-3">
       <div
-        ref={sceneRef}
-        className="relative w-full max-w-[900px] min-h-0 flex-1 sm:max-h-[620px]"
-        style={{ perspective: '1800px' }}
+        ref={ref}
+        className="relative w-full max-w-[900px] min-h-0 flex-1 touch-none select-none sm:max-h-[620px]"
+        style={{ perspective: wide ? '2800px' : '1800px' }}
         aria-roledescription="wallet"
-        aria-live="polite"
       >
-        {/* Wallet leather */}
+        {/* Wallet leather backing */}
         <div
           className="absolute inset-0 border-4 border-[#1b1530]"
-          style={{ background: PX.wood, boxShadow: `8px 8px 0 0 ${PX.ink}` }}
-        />
-        <div
-          className={`relative grid h-full w-full ${wide ? 'grid-cols-2' : 'grid-rows-2'}`}
-          style={{ transformStyle: 'preserve-3d' }}
-        >
-          <Flap side="a" wide={wide}>
-            {renderItem(underA, 'a')}
-          </Flap>
-          <Flap side="b" wide={wide}>
-            {renderItem(underB, 'b')}
-          </Flap>
-        </div>
-
-        {/* Spine */}
-        <div
-          aria-hidden
-          className={`pointer-events-none absolute ${
-            wide ? 'top-1 bottom-1 left-1/2 w-3 -translate-x-1/2' : 'left-1 right-1 top-1/2 h-3 -translate-y-1/2'
-          }`}
-          style={{
-            background: '#7a4f2c',
-            borderLeft: wide ? `2px solid ${PX.ink}` : undefined,
-            borderRight: wide ? `2px solid ${PX.ink}` : undefined,
-            borderTop: wide ? undefined : `2px solid ${PX.ink}`,
-            borderBottom: wide ? undefined : `2px solid ${PX.ink}`,
-          }}
+          style={{ background: '#7a4f2c', boxShadow: '8px 8px 0 0 #1b1530' }}
         />
 
-        {turn !== null && leafFront && leafBack && (
-          <div
-            ref={leafRef}
-            className="absolute z-20"
-            style={{ ...leafStyle, transformStyle: 'preserve-3d' }}
-          >
-            <div className="absolute inset-0" style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
-              <Flap side={leafFront.side} wide={wide} leaf>
-                {renderItem(leafFront.item, leafFront.side)}
-              </Flap>
+        {wide ? (
+          <div className="absolute inset-2" style={{ transformStyle: 'preserve-3d' }}>
+            {/* Static left page: the left of this spread until the leaf lands on it. */}
+            <div className="absolute inset-y-0 left-0 w-1/2">
+              {page(base * 2, 'right')}
+              <Shadow side="right" opacity={turning && frac > 0.5 ? castShadow : 0} />
             </div>
+            {/* Static right page: what the turning leaf reveals. */}
+            <div className="absolute inset-y-0 right-0 w-1/2">
+              {page(turning ? base * 2 + 3 : base * 2 + 1, 'left')}
+              <Shadow side="left" opacity={turning && frac <= 0.5 ? castShadow : 0} />
+            </div>
+            {turning && (
+              <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-1/2" style={leafStyle}>
+                <div className="absolute inset-0" style={face}>
+                  {page(base * 2 + 1, 'left')}
+                  <Shade side="right" opacity={frontShade} />
+                </div>
+                <div className="absolute inset-0" style={{ ...face, transform: 'rotateY(180deg)' }}>
+                  {page(base * 2 + 2, 'right')}
+                  <Shade side="left" opacity={backShade} />
+                </div>
+              </div>
+            )}
+            {/* Spine */}
             <div
-              className="absolute inset-0"
-              style={{
-                backfaceVisibility: 'hidden',
-                WebkitBackfaceVisibility: 'hidden',
-                transform: wide ? 'rotateY(180deg)' : 'rotateX(180deg)',
-              }}
-            >
-              <Flap side={leafBack.side} wide={wide} leaf>
-                {renderItem(leafBack.item, leafBack.side)}
-              </Flap>
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 left-1/2 z-30 w-3 -translate-x-1/2"
+              style={{ background: '#5a381c', borderLeft: '2px solid #1b1530', borderRight: '2px solid #1b1530' }}
+            />
+          </div>
+        ) : (
+          <div className="absolute inset-2 overflow-hidden" style={{ transformStyle: 'preserve-3d' }}>
+            <div className="absolute inset-0 pl-2">
+              <div className="relative h-full w-full">
+                {page(turning ? base + 1 : base, 'left')}
+                <Shadow side="left" opacity={turning ? castShadow : 0} />
+              </div>
             </div>
+            {turning && (
+              <div className="pointer-events-none absolute inset-y-0 right-0 left-2 z-20" style={leafStyle}>
+                <div className="absolute inset-0" style={face}>
+                  {page(base, 'left')}
+                  <Shade side="right" opacity={frontShade} />
+                </div>
+                <div className="absolute inset-0" style={{ ...face, transform: 'rotateY(180deg)' }}>
+                  <LeafLining />
+                  <Shade side="left" opacity={backShade} />
+                </div>
+              </div>
+            )}
+            {/* Binding along the left edge */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 left-0 z-30 w-2"
+              style={{ background: '#5a381c', borderRight: '2px solid #1b1530' }}
+            />
           </div>
         )}
       </div>
@@ -292,21 +287,21 @@ export function WalletScene({ status, items, filtered, copiedCode, onCopy, onMar
         <button
           type="button"
           className="px-btn font-pixel !px-3 !py-1 text-lg"
-          onClick={() => flip(-1)}
-          disabled={!interactive || spread === 0 || turn !== null}
-          aria-label="Previous spread"
+          onClick={() => step(-1)}
+          disabled={current <= 0}
+          aria-label={wide ? 'Previous spread' : 'Previous page'}
         >
           ◀
         </button>
         <span className="font-pixel min-w-[4.5rem] text-center text-lg text-[#1b1530]" aria-live="polite">
-          {spread + 1} / {spreadCount}
+          {current + 1} / {stops}
         </span>
         <button
           type="button"
           className="px-btn font-pixel !px-3 !py-1 text-lg"
-          onClick={() => flip(1)}
-          disabled={!interactive || spread >= spreadCount - 1 || turn !== null}
-          aria-label="Next spread"
+          onClick={() => step(1)}
+          disabled={current >= stops - 1}
+          aria-label={wide ? 'Next spread' : 'Next page'}
         >
           ▶
         </button>
@@ -315,80 +310,31 @@ export function WalletScene({ status, items, filtered, copiedCode, onCopy, onMar
   );
 }
 
-function Flap({ side, wide, leaf, children }: { side: Side; wide: boolean; leaf?: boolean; children: ReactNode }) {
+/** Darkening gradient on a turning face, heaviest on its free edge. */
+function Shade({ side, opacity }: { side: 'left' | 'right'; opacity: number }) {
   return (
     <div
-      className="relative flex h-full w-full min-h-0 flex-col p-2.5 sm:p-4"
-      style={leaf ? { background: PX.wood, border: `4px solid ${PX.ink}` } : undefined}
-    >
-      {/* Stitching */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-1.5 border-2 border-dashed"
-        style={{ borderColor: '#6b4424' }}
-      />
-      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-1 pt-1">
-        {children}
-      </div>
-      {/* Card pocket */}
-      <div
-        aria-hidden
-        className={`relative -mt-3 h-5 shrink-0 border-4 border-[#1b1530] sm:h-7 ${wide ? '' : ''}`}
-        style={{
-          background: side === 'a' ? '#8f5f36' : '#94633a',
-          boxShadow: `inset 0 4px 0 0 #c48d5a`,
-        }}
-      >
-        <div className="absolute inset-x-2 top-1/2 border-t-2 border-dashed" style={{ borderColor: '#5a381c' }} />
-      </div>
-    </div>
+      aria-hidden
+      className="pointer-events-none absolute inset-0"
+      style={{
+        opacity,
+        background: `linear-gradient(to ${side}, rgba(27,21,48,0.1), ${SHADE})`,
+      }}
+    />
   );
 }
 
-function EmptySlot({ sprite }: { sprite?: boolean }) {
+/** Soft shadow the lifted leaf casts on the page beneath, strongest at the spine. */
+function Shadow({ side, opacity }: { side: 'left' | 'right'; opacity: number }) {
+  if (opacity <= 0) return null;
   return (
     <div
-      className="flex h-full max-h-[220px] w-full max-w-[380px] items-center justify-center border-4 border-dashed"
-      style={{ borderColor: '#6b4424', background: '#9a6a40' }}
-    >
-      {sprite && <PixelSprite rows={COIN} palette={COIN_PALETTE} scale={6} title="Empty wallet coin" />}
-    </div>
-  );
-}
-
-function EmptyCard({ filtered }: { filtered: boolean }) {
-  return (
-    <div className="px-panel flex w-full max-w-[380px] flex-col items-center gap-3 p-4 text-center">
-      <p className="font-pixel-body text-xl leading-tight">
-        {filtered
-          ? 'No saved codes match your search.'
-          : 'No codes or offers saved yet - import a coupon or business card on the Import tab'}
-      </p>
-      {!filtered && (
-        <Link href="/import" className="px-btn text-sm">
-          Go to Import
-        </Link>
-      )}
-    </div>
-  );
-}
-
-function LoadingCard() {
-  return (
-    <div className="px-panel flex w-full max-w-[380px] flex-col items-center gap-3 p-6" role="status">
-      <div className="px-loader" />
-      <span className="font-pixel text-sm">Loading wallet…</span>
-    </div>
-  );
-}
-
-function ErrorCard({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div className="px-panel flex w-full max-w-[380px] flex-col items-center gap-3 p-4 text-center" role="alert">
-      <p className="font-pixel-body text-xl leading-tight">Could not load your wallet.</p>
-      <button type="button" className="px-btn text-sm !bg-[#ff4f5e]" onClick={onRetry}>
-        Retry
-      </button>
-    </div>
+      aria-hidden
+      className="pointer-events-none absolute inset-0"
+      style={{
+        opacity,
+        background: `linear-gradient(to ${side === 'left' ? 'right' : 'left'}, ${SHADE}, rgba(27,21,48,0) 65%)`,
+      }}
+    />
   );
 }

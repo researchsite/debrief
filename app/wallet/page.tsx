@@ -10,12 +10,29 @@ export default function WalletPage() {
   const [status, setStatus] = useState<WalletStatus>('loading');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [eventName, setEventName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/event')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { event?: { name?: string } | null } | null) => {
+        if (!cancelled && data?.event?.name) setEventName(data.event.name);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     fetch('/api/wallet')
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = (await r.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(body?.error ?? `HTTP ${r.status}`);
+        }
         return r.json();
       })
       .then((data: { coupons?: CouponData[] }) => {
@@ -97,10 +114,10 @@ export default function WalletPage() {
       </div>
 
       <WalletScene
-        key={q}
         status={status}
         items={sorted}
-        filtered={q.length > 0}
+        query={q}
+        eventName={eventName}
         copiedCode={copiedCode}
         onCopy={handleCopy}
         onMarkUsed={handleMarkUsed}
