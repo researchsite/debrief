@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSceneProgress } from '@/components/pixel/useSceneProgress';
-import type { DialSegment, ScreenFn } from './EventDial';
+import type { DialSegment, ScreenBox } from './EventDial';
 import type { EventData, EventExtraction } from './useEventData';
 
 const EventDial = dynamic(() => import('./EventDial'), {
@@ -12,11 +12,8 @@ const EventDial = dynamic(() => import('./EventDial'), {
 });
 
 const RANGE = 5000;
-
-// Keep in sync with the wall screen's classes: top-10 (40px), h-[38%], w-[min(92%,760px)].
-const wallCenterY: ScreenFn = (_w, h) => (40 + h * 0.19) / Math.max(1, h);
-const wallWidth: ScreenFn = (w) => Math.min(w * 0.92, 760) / Math.max(1, w);
-const PLACEHOLDER_KEY = '__import__';
+/** The dial always shows at least this many wedges so it reads as a disc. */
+const MIN_SLOTS = 6;
 
 function mod(n: number, m: number) {
   return ((n % m) + m) % m;
@@ -34,6 +31,7 @@ function WallContent({
   onRetry,
   onImport,
   empty,
+  portrait,
 }: {
   event: EventExtraction | null;
   loadState: EventData['loadState'];
@@ -41,11 +39,12 @@ function WallContent({
   onRetry: () => void;
   onImport: () => void;
   empty: boolean;
+  portrait: boolean;
 }) {
   if (loadState === 'loading') {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
-        <div className="px-loader" style={{ background: 'var(--px-sky)' }} />
+        <div className="px-loader" style={{ background: 'var(--px-purple)' }} />
         <p className="font-pixel text-lg">Warming up the projector…</p>
       </div>
     );
@@ -65,11 +64,13 @@ function WallContent({
   }
   if (!event) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-4">
-        <p className="font-pixel text-xl">{empty ? 'No events yet - import one' : '+ Import event'}</p>
-        <p className="font-pixel-body text-xl opacity-80">Paste an event schedule URL to fill the dial.</p>
-        <button type="button" className="px-btn text-sm" onClick={onImport}>
-          Import Event
+      <div className="h-full flex flex-col items-center justify-center gap-2 text-center px-4">
+        <p className={`font-pixel ${portrait ? 'text-lg' : 'text-2xl'}`}>{empty ? 'No events yet' : 'This slot is empty'}</p>
+        <p className={`font-pixel-body ${portrait ? 'text-lg' : 'text-xl'} leading-tight opacity-75 max-w-[34ch]`}>
+          Paste an event schedule URL and its agenda will be projected here.
+        </p>
+        <button type="button" className="px-btn text-sm mt-1" onClick={onImport}>
+          + Import Event
         </button>
       </div>
     );
@@ -77,20 +78,28 @@ function WallContent({
   const meta = [event.event.date, event.event.venue].filter(Boolean).join(' · ');
   return (
     <div className="h-full flex flex-col min-h-0">
-      <div className="shrink-0 pb-2 mb-2 border-b-2 border-dashed border-[rgba(207,234,255,0.4)]">
-        <h2 className="font-pixel text-xl sm:text-2xl leading-tight break-words">{event.event.name}</h2>
-        {meta && <p className="font-pixel-body text-lg leading-none opacity-80">{meta}</p>}
+      <div className="shrink-0 pb-1.5 mb-2 border-b-2 border-[rgba(27,21,48,0.18)]">
+        <p className="font-pixel text-[10px] tracking-[0.2em] uppercase opacity-50 leading-none mb-1">Now showing</p>
+        <h2 className={`font-pixel ${portrait ? 'text-lg' : 'text-2xl'} leading-tight break-words`}>{event.event.name}</h2>
+        {meta && <p className={`font-pixel-body ${portrait ? 'text-base' : 'text-lg'} leading-none opacity-70`}>{meta}</p>}
       </div>
       {event.sessions.length === 0 ? (
-        <p className="font-pixel-body text-xl opacity-80">No sessions found for this event yet.</p>
+        <p className="font-pixel-body text-xl opacity-70">No sessions found for this event yet.</p>
       ) : (
-        <ul className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-1 event-wall-scroll">
+        <ul
+          className={`flex-1 min-h-0 overflow-y-auto pr-2 event-wall-scroll touch-pan-y ${portrait ? 'space-y-1.5' : 'space-y-1'}`}
+        >
           {event.sessions.map((s, i) => (
-            <li key={`${s.starts}-${i}`} className="font-pixel-body text-lg sm:text-xl leading-tight flex flex-wrap gap-x-3">
-              <span className="text-[var(--px-sun)] whitespace-nowrap">{sessionTime(s.starts, s.ends)}</span>
-              <span className="flex-1 min-w-[10ch]">
-                {s.title?.trim() || <span className="opacity-60 italic">Untitled session</span>}
-                {s.room ? <span className="opacity-70"> · {s.room}</span> : null}
+            <li
+              key={`${s.starts}-${i}`}
+              className={`font-pixel-body leading-tight ${portrait ? 'text-base' : 'text-xl grid grid-cols-[minmax(0,auto)_1fr] gap-x-4'}`}
+            >
+              <span className={`text-[var(--px-purple)] whitespace-nowrap ${portrait ? 'block text-sm leading-none' : ''}`}>
+                {sessionTime(s.starts, s.ends)}
+              </span>
+              <span className="min-w-0 break-words">
+                {s.title?.trim() || <span className="opacity-50 italic">Untitled session</span>}
+                {s.room ? <span className="opacity-55"> · {s.room}</span> : null}
               </span>
             </li>
           ))}
@@ -167,15 +176,13 @@ function ImportSheet({ data, onClose, onImported }: {
 export function EventScene({ data }: { data: EventData }) {
   const { events, loadState, loadError, retryLoad, storedEventUrl, refreshing, handleRefresh, lastRefreshed, setError } = data;
   const [sheetOpen, setSheetOpen] = useState(false);
-  const hubAnchor = useRef<HTMLDivElement>(null);
 
-  const segments: DialSegment[] = useMemo(
-    () => [
-      ...events.map((e, i) => ({ key: `${e.event.name}-${i}`, label: e.event.name || 'Untitled event' })),
-      { key: PLACEHOLDER_KEY, label: '+ Import event', placeholder: true },
-    ],
-    [events],
-  );
+  // Real events first, then empty slots up to MIN_SLOTS. Events are never duplicated.
+  const segments: DialSegment[] = useMemo(() => {
+    const list: DialSegment[] = events.map((e, i) => ({ key: `${e.event.name}-${i}`, label: e.event.name || 'Untitled event' }));
+    for (let i = list.length; i < MIN_SLOTS; i++) list.push({ key: `__empty__${i}`, label: 'Empty slot', empty: true });
+    return list;
+  }, [events]);
   const count = segments.length;
 
   const { ref, value, target, setTarget } = useSceneProgress<HTMLDivElement>({
@@ -191,7 +198,7 @@ export function EventScene({ data }: { data: EventData }) {
   const activeIndex = mod(Math.round(value + RANGE), count);
   const settledIndex = mod(Math.round(target + RANGE), count);
   const active = segments[activeIndex];
-  const activeEvent = active?.placeholder ? null : events[activeIndex] ?? null;
+  const activeEvent = active?.empty ? null : events[activeIndex] ?? null;
 
   const step = useCallback((dir: number) => setTarget((t) => Math.round(t) + dir), [setTarget]);
 
@@ -248,11 +255,17 @@ export function EventScene({ data }: { data: EventData }) {
     };
   }, [wallKey, shownKey]);
   const shownIdx = segments.findIndex((s) => s.key === shownKey);
-  const shownEvent = shownIdx >= 0 && !segments[shownIdx].placeholder ? events[shownIdx] ?? null : activeEvent;
+  const shownEvent = shownIdx >= 0 && !segments[shownIdx].empty ? events[shownIdx] ?? null : activeEvent;
+
+  // Agenda box: positioned every frame by the dial so it sits exactly on the screen mesh.
+  const screenRef = useRef<HTMLDivElement>(null);
+  const [screenBox, setScreenBox] = useState<ScreenBox>({ width: 0, height: 0, portrait: false });
+  const onScreenBox = useCallback((b: ScreenBox) => setScreenBox(b), []);
+  const compact = screenBox.portrait || screenBox.width < 440;
 
   return (
     <div
-      className="relative w-full overflow-hidden select-none bg-[var(--px-night)] [&_canvas]:[image-rendering:pixelated]"
+      className="relative w-full overflow-hidden select-none bg-[var(--px-night)]"
       style={{ height: 'calc(100svh - 64px)' }}
       aria-label="Event dial. Use left and right arrows to switch events."
     >
@@ -261,25 +274,23 @@ export function EventScene({ data }: { data: EventData }) {
           segments={segments}
           value={value + RANGE}
           activeIndex={activeIndex}
-          hubAnchor={hubAnchor}
-          screenY={wallCenterY}
-          screenW={wallWidth}
+          screenRef={screenRef}
+          onScreenBox={onScreenBox}
         />
       </div>
 
-      {/* Hub Import button, pinned to the hub's projected position by the dial */}
-      <div ref={hubAnchor} className="absolute left-0 top-0 z-20 opacity-0 transition-opacity will-change-transform">
-        <button type="button" className="px-btn whitespace-nowrap text-sm" onClick={openSheet} disabled={data.loading}>
-          Import Event
-        </button>
-      </div>
-
-      {/* Projected wall screen */}
-      <div className="absolute left-1/2 -translate-x-1/2 top-10 w-[min(92%,760px)] h-[38%] z-10">
-        <div className="event-wall relative h-full p-3 sm:p-4 text-[#eaf6ff] border-4 border-[#cfeaff] overflow-hidden">
+      {/* Agenda projected on the screen (DOM, aligned to the 3D screen by the dial) */}
+      {screenBox.width > 0 && (
+        <div
+          ref={screenRef}
+          data-w={screenBox.width}
+          data-h={screenBox.height}
+          className="event-screen absolute left-0 top-0 z-10 origin-top-left text-[var(--px-ink)] invisible"
+          style={{ width: screenBox.width, height: screenBox.height }}
+        >
           <div
-            className="relative z-10 h-full transition-opacity duration-[250ms] ease-out"
-            style={{ opacity: fading ? 0 : 1 }}
+            className={`relative h-full ${compact ? 'px-3 py-2.5' : 'px-5 py-4'} transition-opacity duration-[250ms] ease-out`}
+            style={{ opacity: fading && wallKey !== shownKey ? 0 : 1 }}
             aria-live="polite"
           >
             <WallContent
@@ -289,15 +300,29 @@ export function EventScene({ data }: { data: EventData }) {
               onRetry={retryLoad}
               onImport={openSheet}
               empty={events.length === 0}
+              portrait={compact}
             />
           </div>
-          <div aria-hidden className="event-wall-scanlines pointer-events-none absolute inset-0 z-20" />
         </div>
+      )}
+
+      {/* Import button, on the right side of the stage */}
+      <div className="absolute right-3 bottom-20 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 z-20">
+        <button
+          type="button"
+          className="px-btn whitespace-nowrap text-sm flex items-center gap-2 shadow-lg"
+          onClick={openSheet}
+          disabled={data.loading}
+        >
+          <span aria-hidden className="text-lg leading-none">+</span>
+          <span className="sm:hidden">Import</span>
+          <span className="hidden sm:inline">Import Event</span>
+        </button>
       </div>
 
       {/* Refresh chip for the stored event */}
       {storedEventUrl && activeEvent && (
-        <div className="absolute right-3 top-[calc(38%+52px)] z-20 flex flex-col items-end gap-1">
+        <div className="absolute left-3 top-2 z-20 flex flex-col items-start gap-1">
           <button type="button" className="px-btn text-xs !px-2 !py-1" onClick={handleRefresh} disabled={refreshing}>
             {refreshing ? 'Refreshing…' : 'Refresh schedule'}
           </button>
@@ -315,7 +340,7 @@ export function EventScene({ data }: { data: EventData }) {
           ◀
         </button>
         <div className="px-chip bg-[var(--px-paper)] text-[var(--px-ink)] pointer-events-auto max-w-[55vw] truncate !text-sm !py-1">
-          <span className="truncate">{active?.label ?? ''}</span>
+          <span className={`truncate ${active?.empty ? 'opacity-60' : ''}`}>{active?.label ?? ''}</span>
           <span className="ml-2 opacity-60 shrink-0">{settledIndex + 1}/{count}</span>
         </div>
         <button type="button" className="px-btn pointer-events-auto text-lg !px-3 !py-1" onClick={() => step(1)} aria-label="Next event">
@@ -345,25 +370,12 @@ export function EventScene({ data }: { data: EventData }) {
       )}
 
       <style>{`
-        .event-wall {
-          background: radial-gradient(ellipse at 50% 40%, rgba(120, 190, 255, 0.34), rgba(40, 60, 140, 0.55) 70%, rgba(27, 21, 48, 0.75));
-          box-shadow: 0 0 0 4px #1b1530, 0 0 36px 6px rgba(127, 211, 255, 0.45), inset 0 0 40px rgba(127, 211, 255, 0.25);
-          text-shadow: 0 0 6px rgba(127, 211, 255, 0.6);
-          animation: event-wall-flicker 4s steps(1) infinite;
+        .event-screen {
+          background: radial-gradient(ellipse 70% 75% at 50% 46%, #ffffff 0%, #fbfaf6 45%, #ece8df 80%, #ddd8cd 100%);
+          box-shadow: inset 0 0 60px rgba(27, 21, 48, 0.12);
         }
-        .event-wall-scanlines {
-          background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 0 2px, rgba(0, 0, 0, 0.14) 2px 4px);
-        }
-        .event-wall-scroll::-webkit-scrollbar { width: 8px; }
-        .event-wall-scroll::-webkit-scrollbar-thumb { background: #cfeaff; }
-        @keyframes event-wall-flicker {
-          0%, 100% { filter: brightness(1); }
-          47% { filter: brightness(0.93); }
-          48% { filter: brightness(1.04); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .event-wall { animation: none; }
-        }
+        .event-wall-scroll::-webkit-scrollbar { width: 6px; }
+        .event-wall-scroll::-webkit-scrollbar-thumb { background: rgba(27, 21, 48, 0.25); border-radius: 3px; }
       `}</style>
     </div>
   );
