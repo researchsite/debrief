@@ -1,4 +1,4 @@
-import { query } from './graph';
+import { query, roQuery } from './graph';
 
 export interface SetupInput {
   name: string;
@@ -74,6 +74,182 @@ export interface LinkedInArchive {
   pastCompanies?: { name: string; title: string; started: string; ended: string }[];
   schools?: { name: string; degree?: string; started?: string; ended?: string }[];
   skills?: string[];
+}
+
+export interface PersonInput {
+  linkedinUrl: string;
+  name: string;
+  headline: string;
+  city: string;
+  currentCompany: string;
+  pastCompanies: string[];
+  schools: string[];
+  skills: string[];
+  topics: string[];         // normalized lowercase, from OpenAI extraction
+  noteText: string;         // user's raw note (never modified by AI)
+  isHiring: boolean;        // if true, create (currentCompany)-[:HIRING]->(myTargetRole)
+}
+
+export async function writePerson(input: PersonInput, graphName?: string): Promise<void> {
+  const {
+    linkedinUrl,
+    name,
+    headline,
+    city,
+    currentCompany,
+    pastCompanies,
+    schools,
+    skills,
+    topics,
+    noteText,
+    isHiring,
+  } = input;
+
+  const timestamp = Date.now();
+
+  // 1. Create/update Person node
+  await query(
+    'MERGE (p:Person {linkedin_url: $url}) SET p.name = $name, p.headline = $headline, p.city = $city',
+    { url: linkedinUrl, name, headline, city },
+    graphName,
+  );
+
+  // 2. MET edge from Me
+  await query(
+    'MATCH (me:Me) MATCH (p:Person {linkedin_url: $url}) MERGE (me)-[:MET {at: $timestamp}]->(p)',
+    { url: linkedinUrl, timestamp },
+    graphName,
+  );
+
+  // 3. Current company WORKS_AT
+  if (currentCompany) {
+    await query(
+      'MERGE (c:Company {name: $company}) WITH c MATCH (p:Person {linkedin_url: $url}) MERGE (p)-[:WORKS_AT]->(c)',
+      { company: currentCompany, url: linkedinUrl },
+      graphName,
+    );
+  }
+
+  // 4. Past companies WORKED_AT
+  for (const company of pastCompanies) {
+    await query(
+      'MERGE (c:Company {name: $company}) WITH c MATCH (p:Person {linkedin_url: $url}) MERGE (p)-[:WORKED_AT]->(c)',
+      { company, url: linkedinUrl },
+      graphName,
+    );
+  }
+
+  // 5. Schools STUDIED_AT
+  for (const school of schools) {
+    await query(
+      'MERGE (s:School {name: $school}) WITH s MATCH (p:Person {linkedin_url: $url}) MERGE (p)-[:STUDIED_AT]->(s)',
+      { school, url: linkedinUrl },
+      graphName,
+    );
+  }
+
+  // 6. Skills HAS_SKILL (lowercase)
+  for (const skill of skills) {
+    const normalized = skill.toLowerCase();
+    await query(
+      'MERGE (sk:Skill {name: $skill}) WITH sk MATCH (p:Person {linkedin_url: $url}) MERGE (p)-[:HAS_SKILL]->(sk)',
+      { skill: normalized, url: linkedinUrl },
+      graphName,
+    );
+  }
+
+  // 7. Topics INTERESTED_IN (lowercase)
+  for (const topic of topics) {
+    const normalized = topic.toLowerCase();
+    await query(
+      'MERGE (t:Topic {name: $topic}) WITH t MATCH (p:Person {linkedin_url: $url}) MERGE (p)-[:INTERESTED_IN]->(t)',
+      { topic: normalized, url: linkedinUrl },
+      graphName,
+    );
+  }
+
+  // 8. Note HAS_NOTE (CREATE, never MERGE — each note is unique)
+  await query(
+    'MATCH (p:Person {linkedin_url: $url}) CREATE (n:Note {text: $text, created_at: $timestamp}) MERGE (p)-[:HAS_NOTE]->(n)',
+    { url: linkedinUrl, text: noteText, timestamp },
+    graphName,
+  );
+
+  // 9. If isHiring: link company to the role Me WANTS
+  if (isHiring) {
+    await query(
+      `MATCH (me:Me)-[:WANTS]->(r:Role)
+       MATCH (p:Person {linkedin_url: $url})-[:WORKS_AT]->(c:Company)
+       MERGE (c)-[:HIRING]->(r)`,
+      { url: linkedinUrl },
+      graphName,
+    );
+  }
+}
+
+export interface CommonGround {
+  alreadyConnected: boolean;
+  warmIntro: { via: string; company: string }[];
+  sharedEmployers: string[];
+  sharedSchools: string[];
+  sharedTopics: string[];
+}
+
+export async function getCommonGround(personUrl: string, graphName?: string): Promise<CommonGround> {
+  // Already connected?
+  const connectedResult = await roQuery(
+    'MATCH (me:Me)-[:CONNECTED]->(p:Person {linkedin_url: $url}) RETURN count(p) > 0 AS connected',
+    { url: personUrl },
+    graphName,
+  );
+  const alreadyConnected = Boolean(connectedResult.data?.[0]?.connected ?? false);
+
+  // Warm intro: my connection works at this person's company
+  const warmIntroResult = await roQuery(
+    `MATCH (me:Me)-[:CONNECTED]->(c:Person)-[:WORKS_AT]->(co:Company)<-[:WORKS_AT]-(p:Person {linkedin_url: $url})
+     RETURN c.name AS via, co.name AS company`,
+    { url: personUrl },
+    graphName,
+  );
+  const warmIntro = (warmIntroResult.data ?? []).map((row: Record<string, unknown>) => ({
+    via: String(row.via ?? ''),
+    company: String(row.company ?? ''),
+  }));
+
+  // Shared employer
+  const sharedEmployersResult = await roQuery(
+    `MATCH (me:Me)-[:WORKS_AT|WORKED_AT]->(co:Company)<-[:WORKS_AT|WORKED_AT]-(p:Person {linkedin_url: $url})
+     RETURN co.name AS name`,
+    { url: personUrl },
+    graphName,
+  );
+  const sharedEmployers = (sharedEmployersResult.data ?? []).map((row: Record<string, unknown>) => String(row.name ?? ''));
+
+  // Shared school
+  const sharedSchoolsResult = await roQuery(
+    `MATCH (me:Me)-[:STUDIED_AT]->(s:School)<-[:STUDIED_AT]-(p:Person {linkedin_url: $url})
+     RETURN s.name AS name`,
+    { url: personUrl },
+    graphName,
+  );
+  const sharedSchools = (sharedSchoolsResult.data ?? []).map((row: Record<string, unknown>) => String(row.name ?? ''));
+
+  // Shared topics
+  const sharedTopicsResult = await roQuery(
+    `MATCH (me:Me)-[:HAS_SKILL|INTERESTED_IN]->(t)<-[:HAS_SKILL|INTERESTED_IN]-(p:Person {linkedin_url: $url})
+     RETURN t.name AS name`,
+    { url: personUrl },
+    graphName,
+  );
+  const sharedTopics = (sharedTopicsResult.data ?? []).map((row: Record<string, unknown>) => String(row.name ?? ''));
+
+  return {
+    alreadyConnected,
+    warmIntro,
+    sharedEmployers,
+    sharedSchools,
+    sharedTopics,
+  };
 }
 
 export async function writeLinkedInArchive(
