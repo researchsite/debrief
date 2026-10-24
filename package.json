@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "import:linkedin": "node scripts/import-linkedin.mjs",
     "setup:conference": "node scripts/setup-conference.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
