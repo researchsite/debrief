@@ -1,0 +1,8 @@
+Notes: This is a test fixture. Replace with real Connections.csv for production.
+
+First Name,Last Name,URL,Email Address,Company,Position,Connected On
+Jordan,Smith,https://www.linkedin.com/in/jordan-smith-fake,,Stripe,Engineer,2024-01-15
+Priya,Kumar,https://www.linkedin.com/in/priya-kumar-fake,,Notion,Designer,2023-11-20
+Carlos,Vega,https://www.linkedin.com/in/carlos-vega-fake,,Google,PM,2024-03-10
+Sam,Lee,https://www.linkedin.com/in/sam-lee-fake,,FalkorDB,Developer Advocate,2024-08-05
+Nina,Okonkwo,https://www.linkedin.com/in/nina-okonkwo-fake,,Bright Data,Solutions Engineer,2026-09-30

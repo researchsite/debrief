@@ -1,0 +1,27 @@
+[
+  {
+    "url": "https://techcrunch.com/fake-stripe-article",
+    "title": "Stripe launches new payments feature",
+    "snippet": "Stripe today announced a major update to its payments API..."
+  },
+  {
+    "url": "https://stripe.com/blog/fake-post",
+    "title": "Behind the engineering at Stripe",
+    "snippet": "Our payments team shares how we handle..."
+  },
+  {
+    "url": "https://news.ycombinator.com/fake-stripe-thread",
+    "title": "Ask HN: How does Stripe handle payment failures?",
+    "snippet": "A discussion on Hacker News about Stripe's reliability engineering..."
+  },
+  {
+    "url": "https://medium.com/fake-stripe-blog",
+    "title": "Lessons from scaling payments infrastructure",
+    "snippet": "Engineering insights from the team that built Stripe's global payments network..."
+  },
+  {
+    "url": "https://dev.to/fake-stripe-guide",
+    "title": "Getting started with Stripe APIs in 2026",
+    "snippet": "A practical guide to integrating Stripe's latest payment APIs into your application..."
+  }
+]

@@ -1,0 +1,41 @@
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import { Geist, Geist_Mono } from "next/font/google";
+import { BottomNav } from "@/components/BottomNav";
+import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "Debrief",
+  description: "Your conference memory",
+};
+
+export default function RootLayout({ children }: LayoutProps<"/">) {
+  return (
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
+      <body
+        className="min-h-full flex flex-col bg-background text-foreground"
+        suppressHydrationWarning
+      >
+        <div className="flex flex-col min-h-svh w-full max-w-[420px] mx-auto relative">
+          <main className="flex-1 overflow-y-auto pb-16">{children}</main>
+          <Suspense>
+            <BottomNav />
+          </Suspense>
+        </div>
+      </body>
+    </html>
+  );
+}
