@@ -1190,6 +1190,65 @@ export async function getWhyPath(personName: string, graphName?: string): Promis
   };
 }
 
+// ────────────────────────────────────────────────────────────
+// Session retrieval (for schedule display + slide matching)
+// ────────────────────────────────────────────────────────────
+
+export interface StoredSession {
+  title: string;
+  starts: string;
+  ends: string;
+  room: string;
+  abstract: string;
+  speakerNames: string[];
+}
+
+export interface StoredEvent {
+  name: string;
+  date: string;
+  venue: string;
+  url: string;
+}
+
+export async function getStoredEvent(graphName?: string): Promise<StoredEvent | null> {
+  const result = await roQuery(
+    'MATCH (e:Event) RETURN e.name AS name, e.date AS date, e.venue AS venue, e.url AS url LIMIT 1',
+    {},
+    graphName,
+  );
+  const row = (result.data ?? [])[0] as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return {
+    name: String(row.name ?? ''),
+    date: String(row.date ?? ''),
+    venue: String(row.venue ?? ''),
+    url: String(row.url ?? ''),
+  };
+}
+
+export async function getSessions(graphName?: string): Promise<StoredSession[]> {
+  const result = await roQuery(
+    `MATCH (s:Session)
+     OPTIONAL MATCH (p:Person)-[:SPEAKS_AT]->(s)
+     RETURN s.title AS title, s.starts AS starts, s.ends AS ends,
+            s.room AS room, s.abstract AS abstract,
+            collect(p.name) AS speakerNames
+     ORDER BY s.starts`,
+    {},
+    graphName,
+  );
+  return (result.data ?? []).map((row: Record<string, unknown>) => ({
+    title: String(row.title ?? ''),
+    starts: String(row.starts ?? ''),
+    ends: String(row.ends ?? ''),
+    room: String(row.room ?? ''),
+    abstract: String(row.abstract ?? ''),
+    speakerNames: Array.isArray(row.speakerNames)
+      ? (row.speakerNames as string[]).filter(Boolean)
+      : [],
+  }));
+}
+
 export async function writeLinkedInArchive(
   linkedinUrl: string,
   archive: LinkedInArchive,
