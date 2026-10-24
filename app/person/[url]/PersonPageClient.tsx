@@ -58,6 +58,7 @@ export default function PersonPageClient({
   const [contextFetchedAt, setContextFetchedAt] = useState<number | null>(initialFetchedAt);
   const [sources, setSources] = useState(initialSources);
   const [refreshing, setRefreshing] = useState(false);
+  const [researchError, setResearchError] = useState<string | null>(null);
 
   const pollContext = useCallback(async () => {
     try {
@@ -87,17 +88,22 @@ export default function PersonPageClient({
 
   async function handleRefresh() {
     setRefreshing(true);
+    setResearchError(null);
     try {
-      await fetch('/api/research', {
+      const response = await fetch('/api/research', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ personUrl: linkedinUrl, force: true }),
       });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error || 'Research could not be completed. Please retry.');
+      }
       // Poll immediately after triggering refresh
       await pollContext();
       window.location.reload();
-    } catch {
-      // ignore
+    } catch (error) {
+      setResearchError(error instanceof Error ? error.message : 'Research could not be completed. Please retry.');
     } finally {
       setRefreshing(false);
     }
@@ -143,6 +149,7 @@ export default function PersonPageClient({
         {!hasContext ? (
           <div className="rounded-xl border border-blue-200 p-4 bg-blue-50 space-y-2">
             <p className="text-xs text-blue-600 pt-1">No research saved yet.</p>
+            {researchError && <p className="text-xs text-red-700">{researchError}</p>}
             {linkedinUrl && <button type="button" disabled={refreshing} className="text-sm underline" onClick={() => void handleRefresh()}>{refreshing ? 'Researching…' : 'Research this person'}</button>}
           </div>
         ) : (
@@ -201,6 +208,7 @@ export default function PersonPageClient({
             >
               {refreshing ? 'Refreshing…' : 'Refresh research'}
             </button>
+            {researchError && <p className="text-xs text-red-700">{researchError}</p>}
           </div>
         )}
       </section>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { roQuery } from '@/lib/graph';
 import { researchPerson, researchPersonForce } from '@/lib/research';
+import { getContext } from '@/lib/graph-writes';
 
 interface RequestBody {
   personUrl: string;
@@ -41,6 +42,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     await researchPersonForce(personUrl, name, company, 'debrief');
   } else {
     await researchPerson(personUrl, name, company, 'debrief');
+  }
+
+  // Research is best effort internally, but don't report success when the
+  // provider returned no usable sources and no context was saved.
+  const context = await getContext(personUrl, 'debrief');
+  if (!context) {
+    return NextResponse.json(
+      { ok: false, error: 'Research returned no usable sources. Check the Bright Data SERP zone and API key, then retry.' },
+      { status: 502 },
+    );
   }
 
   return NextResponse.json({ ok: true });
