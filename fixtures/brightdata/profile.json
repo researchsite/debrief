@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Alex Rivera",
+    "headline": "Staff Engineer at Stripe",
+    "linkedin_url": "https://www.linkedin.com/in/alex-rivera-fake",
+    "city": "San Francisco, CA",
+    "current_company": "Stripe",
+    "past_companies": ["Plaid", "Square"],
+    "schools": ["UC Berkeley"],
+    "skills": ["Payments", "APIs", "Python", "Go"]
+  },
+  {
+    "name": "Maya Patel",
+    "headline": "Product Manager at Notion",
+    "linkedin_url": "https://www.linkedin.com/in/maya-patel-fake",
+    "city": "San Francisco, CA",
+    "current_company": "Notion",
+    "past_companies": ["Asana"],
+    "schools": ["Stanford University"],
+    "skills": ["Product Management", "AI", "Design Thinking"]
+  }
+]
