@@ -11,13 +11,21 @@ export class JsonCompletionError extends Error {
   }
 }
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+let _client: OpenAI | null = null;
+
+function getClient(): OpenAI {
+  if (!_client) {
+    _client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY ?? 'no-key',
+    });
+  }
+  return _client;
+}
 
 export async function jsonCompletion<T>(
   messages: ChatCompletionMessageParam[],
 ): Promise<T> {
+  const client = getClient();
   let rawContent: string | null = null;
   try {
     const response = await client.chat.completions.create(
