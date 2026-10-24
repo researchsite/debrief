@@ -9,6 +9,7 @@ export default defineConfig({
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
     exclude: ['e2e/**', 'node_modules/**'],
+    fileParallelism: false,
     env: {
       FALKORDB_HOST: 'localhost',
       FALKORDB_PORT: '6379',
