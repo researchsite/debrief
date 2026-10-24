@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { BottomNav } from "@/components/BottomNav";
 import "./globals.css";
@@ -27,7 +28,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <div className="flex flex-col min-h-svh w-full max-w-[420px] mx-auto relative">
           <main className="flex-1 overflow-y-auto pb-16">{children}</main>
-          <BottomNav />
+          <Suspense>
+            <BottomNav />
+          </Suspense>
         </div>
       </body>
     </html>
