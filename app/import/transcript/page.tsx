@@ -16,6 +16,7 @@ interface ConfirmState {
     personName: string;
     skip: boolean;
     confirmed: boolean;
+    isPrivate: boolean;
   };
 }
 
@@ -94,6 +95,7 @@ export default function TranscriptImportPage() {
           personName: topCandidate?.name || transcriptPersonName(item.extraction.who.name, item.index),
           skip: false,
           confirmed: false,
+          isPrivate: true,
         };
       }
       setConfirmState(initial);
@@ -106,6 +108,18 @@ export default function TranscriptImportPage() {
 
   const handleConfirm = (index: number) => {
     setConfirmState((prev) => ({ ...prev, [index]: { ...prev[index], confirmed: true, skip: false } }));
+  };
+
+  const handlePersonName = (index: number, personName: string) => {
+    setConfirmState((prev) => ({
+      ...prev,
+      [index]: {
+        ...prev[index],
+        personName,
+        personUrl: transcriptPersonUrl(personName.trim(), filename, index),
+        confirmed: false,
+      },
+    }));
   };
 
   const handleSkip = (index: number) => {
@@ -149,11 +163,12 @@ export default function TranscriptImportPage() {
       return {
         index: item.index,
         personUrl: state?.personUrl ?? `placeholder:${item.index}`,
-        personName: state?.personName ?? item.extraction.who.name,
+        personName: state?.personName?.trim() || transcriptPersonName(item.extraction.who.name, item.index),
         starts: item.starts,
         ends: item.ends,
         extraction: item.extraction,
         skip: !state?.confirmed || state.skip,
+        isPrivate: state?.isPrivate ?? true,
       };
     });
 
@@ -305,6 +320,10 @@ export default function TranscriptImportPage() {
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
                 <Badge variant="secondary" className="self-start">{CONVERSATION_CATEGORIES[extraction.category]}</Badge>
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900">
+                  <span aria-hidden="true">🔒</span>
+                  <span><strong>Private by default.</strong> This conversation stays in your private memory graph. Turn this off only if you intend to share it.</span>
+                </div>
                 {/* Extracted person info */}
                 <p className="text-sm">
                   Talked with{' '}
@@ -318,6 +337,32 @@ export default function TranscriptImportPage() {
                     <span className="text-muted-foreground"> ({extraction.who.role})</span>
                   )}
                 </p>
+
+                {!item.candidates.length && (
+                  <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <label htmlFor={`person-${item.index}`} className="text-xs font-medium">Add person</label>
+                      <span className="text-xs text-muted-foreground">Optional</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Unknown speaker? Add a name so this conversation can be connected to a person.</p>
+                    <input
+                      id={`person-${item.index}`}
+                      value={state?.personName?.startsWith('Unknown person') ? '' : state?.personName ?? ''}
+                      onChange={(event) => handlePersonName(item.index, event.target.value)}
+                      placeholder="Person's name"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    />
+                  </div>
+                )}
+
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={state?.isPrivate ?? true}
+                    onChange={(event) => setConfirmState((prev) => ({ ...prev, [item.index]: { ...prev[item.index], isPrivate: event.target.checked } }))}
+                  />
+                  Keep this conversation private
+                </label>
 
                 {/* Summary */}
                 <p className="text-sm text-muted-foreground">{extraction.summary}</p>

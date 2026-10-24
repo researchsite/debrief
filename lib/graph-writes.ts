@@ -607,6 +607,7 @@ export interface ConversationSaveInput {
   promises: string[];
   followUpNeeded: boolean;
   category?: string;
+  isPrivate?: boolean;
 }
 
 export async function writeConversation(input: ConversationSaveInput, graphName?: string): Promise<void> {
@@ -629,8 +630,9 @@ export async function writeConversation(input: ConversationSaveInput, graphName?
   // 1. MERGE Conversation node
   await query(
     `MERGE (conv:Conversation {starts: $starts, ends: $ends})
-     SET conv.summary = $summary, conv.excerpt = left($summary, 100), conv.category = $category`,
-    { starts, ends, summary, category: input.category ?? 'other' },
+     SET conv.summary = $summary, conv.excerpt = left($summary, 100), conv.category = $category,
+         conv.is_private = $isPrivate`,
+    { starts, ends, summary, category: input.category ?? 'other', isPrivate: input.isPrivate ?? true },
     graphName,
   );
 

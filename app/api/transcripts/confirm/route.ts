@@ -15,6 +15,7 @@ interface ConfirmItem {
   ends: number;
   extraction: ConversationExtraction;
   skip: boolean;
+  isPrivate?: boolean;
 }
 
 interface ConfirmRequest {
@@ -94,6 +95,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         promises: extraction.promises ?? [],
         followUpNeeded: extraction.follow_up_needed ?? false,
         category: extraction.category,
+        isPrivate: confirm.isPrivate !== false,
       });
 
       // 4. Fire-and-forget background research (best effort)
