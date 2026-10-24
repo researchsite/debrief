@@ -137,22 +137,62 @@ function groupByTime(sessions: ExtractedSession[]): Map<string, ExtractedSession
 export default function EventPage() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [extraction, setExtraction] = useState<EventExtraction | null>(null);
   const [meetPlan, setMeetPlan] = useState<MeetPlanEntry[]>([]);
   const [metSet, setMetSet] = useState<Set<string>>(new Set());
+  const [storedEventUrl, setStoredEventUrl] = useState('');
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
-  // On mount, load any existing meet plan
+  // On mount, load stored schedule + meet plan from graph
   useEffect(() => {
-    fetch('/api/event/plan')
+    fetch('/api/event')
       .then((r) => r.json())
-      .then((data: { plan: MeetPlanEntry[] }) => {
-        if (data.plan && data.plan.length > 0) {
-          setMeetPlan(data.plan);
+      .then((data: {
+        ok: boolean;
+        event?: { name: string; date: string; venue: string; url: string };
+        sessions?: ExtractedSession[];
+        meetPlan?: MeetPlanEntry[];
+      }) => {
+        if (!data.ok) return;
+        if (data.event?.name) {
+          setExtraction({
+            event: { name: data.event.name, date: data.event.date, venue: data.event.venue },
+            sessions: data.sessions ?? [],
+          });
+          setStoredEventUrl(data.event.url ?? '');
         }
+        if (data.meetPlan && data.meetPlan.length > 0) setMeetPlan(data.meetPlan);
       })
       .catch(() => {});
   }, []);
+
+  async function handleRefresh() {
+    setError('');
+    setRefreshing(true);
+    try {
+      const res = await fetch('/api/event/refresh', { method: 'POST' });
+      const data = (await res.json()) as {
+        ok: boolean;
+        extraction?: EventExtraction;
+        sessions?: ExtractedSession[];
+        meetPlan?: MeetPlanEntry[];
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? 'Refresh failed');
+        return;
+      }
+      if (data.extraction) setExtraction(data.extraction);
+      if (data.meetPlan) setMeetPlan(data.meetPlan);
+      setLastRefreshed(new Date());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleImport() {
     setError('');
@@ -237,12 +277,36 @@ export default function EventPage() {
       {/* ── Section 2: Agenda ── */}
       {extraction && (
         <div className="space-y-3">
-          <div>
-            <h2 className="text-lg font-semibold">{extraction.event.name}</h2>
-            <p className="text-xs text-muted-foreground">
-              {extraction.event.date}
-              {extraction.event.venue ? ` · ${extraction.event.venue}` : ''}
-            </p>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold">{extraction.event.name}</h2>
+              <p className="text-xs text-muted-foreground">
+                {extraction.event.date}
+                {extraction.event.venue ? ` · ${extraction.event.venue}` : ''}
+              </p>
+              {lastRefreshed && (
+                <p className="text-xs text-muted-foreground">
+                  Updated {lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
+            </div>
+            {storedEventUrl && (
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="shrink-0 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50 transition-colors"
+              >
+                {refreshing ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    Refreshing…
+                  </span>
+                ) : (
+                  'Refresh schedule'
+                )}
+              </button>
+            )}
           </div>
 
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Agenda</h3>
