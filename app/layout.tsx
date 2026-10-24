@@ -25,7 +25,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+      <body
+        className="min-h-full flex flex-col bg-background text-foreground"
+        suppressHydrationWarning
+      >
         <div className="flex flex-col min-h-svh w-full max-w-[420px] mx-auto relative">
           <main className="flex-1 overflow-y-auto pb-16">{children}</main>
           <Suspense>

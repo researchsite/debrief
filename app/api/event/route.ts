@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractEventFromUrl, type EventExtraction } from '@/lib/event-extract';
-import { getMeetPlan, getStoredEvent, getSessions, type MeetPlanEntry } from '@/lib/graph-writes';
+import { getMeetPlan, getStoredEvents, getSessions, type MeetPlanEntry } from '@/lib/graph-writes';
 import fs from 'fs';
 import path from 'path';
 
 export async function GET(): Promise<NextResponse> {
   try {
-    const event = await getStoredEvent('debrief');
-    const sessions = await getSessions('debrief');
+    const storedEvents = await getStoredEvents('debrief');
+    const events = await Promise.all(storedEvents.map(async (event) => ({
+      ...event,
+      sessions: await getSessions('debrief', event.name),
+    })));
     const meetPlan = await getMeetPlan('debrief');
-    return NextResponse.json({ ok: true, event, sessions, meetPlan });
+    return NextResponse.json({ ok: true, events, meetPlan });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : 'Internal server error' },

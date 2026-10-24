@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { writeTranscript, writeConversation, writePerson } from '@/lib/graph-writes';
 import type { ConversationExtraction } from '@/lib/transcript-extract';
+import { isMeaningfulConversation, normalizeConversationExtraction } from '@/lib/transcript-result';
 
 interface ConfirmItem {
   index: number;
@@ -14,6 +15,7 @@ interface ConfirmItem {
   ends: number;
   extraction: ConversationExtraction;
   skip: boolean;
+  isPrivate?: boolean;
 }
 
 interface ConfirmRequest {
@@ -23,18 +25,37 @@ interface ConfirmRequest {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const body = (await req.json()) as ConfirmRequest;
-    const { filename, confirms } = body;
-
-    if (!filename || !Array.isArray(confirms)) {
+    let body: ConfirmRequest;
+    try {
+      body = await req.json();
+    } catch {
       return NextResponse.json({ ok: false, error: 'Invalid request body' }, { status: 400 });
+    }
+    if (!body || typeof body.filename !== 'string' || !body.filename.trim() || !Array.isArray(body.confirms)) {
+      return NextResponse.json({ ok: false, error: 'Invalid request body' }, { status: 400 });
+    }
+    const { filename, confirms } = body;
+    const validated: ConfirmItem[] = [];
+    // Validate the entire batch before any writes.
+    try {
+      for (const confirm of confirms) {
+        if (!confirm || typeof confirm !== 'object') throw new Error('Invalid conversation');
+        if (confirm.skip === true) continue;
+        if (typeof confirm.personUrl !== 'string' || !confirm.personUrl.trim() ||
+            typeof confirm.personName !== 'string' || !confirm.personName.trim() ||
+            !Number.isFinite(confirm.starts) || !Number.isFinite(confirm.ends) || confirm.starts < 0 || confirm.ends <= confirm.starts) {
+          throw new Error('Invalid conversation identity or timestamps');
+        }
+        const extraction = normalizeConversationExtraction(confirm.extraction);
+        if (isMeaningfulConversation(extraction)) validated.push({ ...confirm, extraction });
+      }
+    } catch {
+      return NextResponse.json({ ok: false, error: 'Invalid conversation data. Please review the transcript again.' }, { status: 400 });
     }
 
     let saved = 0;
 
-    for (const confirm of confirms) {
-      if (confirm.skip) continue;
-
+    for (const confirm of validated) {
       const { personUrl, personName, starts, ends, extraction } = confirm;
 
       // 1. Ensure the Person node exists (create if placeholder URL)
@@ -73,16 +94,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         topics: extraction.topics ?? [],
         promises: extraction.promises ?? [],
         followUpNeeded: extraction.follow_up_needed ?? false,
+        category: extraction.category,
+        isPrivate: confirm.isPrivate !== false,
       });
 
       // 4. Fire-and-forget background research (best effort)
       try {
         const baseUrl = req.nextUrl.origin;
-        void fetch(`${baseUrl}/api/research`, {
+        if (!personUrl.startsWith('placeholder:')) void fetch(`${baseUrl}/api/research`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ personUrl }),
-        });
+        }).catch(() => {});
       } catch {
         // Ignore research errors — it's fire-and-forget
       }
