@@ -1,12 +1,16 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { extractEventFromUrl } from '@/lib/event-extract';
-import { getStoredEvent, getSessions, getMeetPlan } from '@/lib/graph-writes';
+import { getStoredEvents, getSessions, getMeetPlan } from '@/lib/graph-writes';
 import fs from 'fs';
 import path from 'path';
 
-export async function POST(): Promise<NextResponse> {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const stored = await getStoredEvent('debrief');
+    const body = await request.json().catch(() => ({})) as { eventName?: string };
+    const events = await getStoredEvents('debrief');
+    const stored = body.eventName
+      ? events.find((event) => event.name === body.eventName)
+      : events.find((event) => event.url) ?? events[0];
     if (!stored?.url) {
       return NextResponse.json(
         { ok: false, error: 'No event URL stored. Import an event first.' },
@@ -14,7 +18,7 @@ export async function POST(): Promise<NextResponse> {
       );
     }
     const extraction = await extractEventFromUrl(stored.url, 'debrief');
-    const sessions = await getSessions('debrief');
+    const sessions = await getSessions('debrief', stored.name);
     const meetPlan = await getMeetPlan('debrief');
 
     // Keep local cache in sync with latest schedule

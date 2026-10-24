@@ -33,6 +33,10 @@ interface EventExtraction {
   sessions: ExtractedSession[];
 }
 
+interface EventEntry extends EventExtraction {
+  url: string;
+}
+
 interface MeetPlanEntry {
   name: string;
   headline: string;
@@ -139,10 +143,9 @@ export default function EventPage() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [extraction, setExtraction] = useState<EventExtraction | null>(null);
+  const [events, setEvents] = useState<EventEntry[]>([]);
   const [meetPlan, setMeetPlan] = useState<MeetPlanEntry[]>([]);
   const [metSet, setMetSet] = useState<Set<string>>(new Set());
-  const [storedEventUrl, setStoredEventUrl] = useState('');
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
 
   // On mount, load stored schedule + meet plan from graph
@@ -151,34 +154,38 @@ export default function EventPage() {
       .then((r) => r.json())
       .then((data: {
         ok: boolean;
-        event?: { name: string; date: string; venue: string; url: string };
-        sessions?: ExtractedSession[];
+        events?: Array<{
+          name: string; date: string; venue: string; url: string;
+          sessions: Array<ExtractedSession & { speakerNames?: string[] }>;
+        }>;
         meetPlan?: MeetPlanEntry[];
       }) => {
         if (!data.ok) return;
-        if (data.event?.name) {
-          setExtraction({
-            event: { name: data.event.name, date: data.event.date, venue: data.event.venue },
-            sessions: (data.sessions ?? []).map((s) => ({
+        setEvents((data.events ?? []).map((event) => ({
+          url: event.url,
+          event: { name: event.name, date: event.date, venue: event.venue },
+          sessions: event.sessions.map((s) => ({
               ...s,
               // Graph returns speakerNames string[]; convert to ExtractedSpeaker[]
               speakers: s.speakers ?? (s as unknown as { speakerNames?: string[] }).speakerNames?.map(
                 (name) => ({ name, title: '', company: '', linkedin_url: '' })
               ) ?? [],
             })),
-          });
-          setStoredEventUrl(data.event.url ?? '');
-        }
+        })));
         if (data.meetPlan && data.meetPlan.length > 0) setMeetPlan(data.meetPlan);
       })
       .catch(() => {});
   }, []);
 
-  async function handleRefresh() {
+  async function handleRefresh(entry: EventEntry) {
     setError('');
     setRefreshing(true);
     try {
-      const res = await fetch('/api/event/refresh', { method: 'POST' });
+      const res = await fetch('/api/event/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventName: entry.event.name }),
+      });
       const data = (await res.json()) as {
         ok: boolean;
         extraction?: EventExtraction;
@@ -190,7 +197,9 @@ export default function EventPage() {
         setError(data.error ?? 'Refresh failed');
         return;
       }
-      if (data.extraction) setExtraction(data.extraction);
+      if (data.extraction) setEvents((prev) => prev.map((current) =>
+        current.event.name === data.extraction!.event.name ? { ...data.extraction!, url: current.url } : current,
+      ));
       if (data.meetPlan) setMeetPlan(data.meetPlan);
       setLastRefreshed(new Date());
     } catch (err) {
@@ -223,7 +232,10 @@ export default function EventPage() {
         setError(data.error ?? 'Something went wrong');
         return;
       }
-      if (data.extraction) setExtraction(data.extraction);
+      if (data.extraction) setEvents((prev) => [
+        ...prev.filter((entry) => entry.event.name !== data.extraction!.event.name),
+        { ...data.extraction!, url: url.trim() },
+      ]);
       if (data.meetPlan) setMeetPlan(data.meetPlan);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error');
@@ -244,8 +256,6 @@ export default function EventPage() {
       // silently fail
     }
   }
-
-  const timeGroups = extraction ? groupByTime(extraction.sessions) : null;
 
   return (
     <div className="px-4 py-6 space-y-6 max-w-[480px] mx-auto pb-24">
@@ -281,14 +291,15 @@ export default function EventPage() {
       </div>
 
       {/* ── Section 2: Agenda ── */}
-      {extraction && (
-        <div className="space-y-3">
+      {events.map((entry) => {
+        const timeGroups = groupByTime(entry.sessions);
+        return <div key={entry.event.name} className="space-y-3 rounded-xl border border-border p-4">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h2 className="text-lg font-semibold">{extraction.event.name}</h2>
+              <h2 className="text-lg font-semibold">{entry.event.name}</h2>
               <p className="text-xs text-muted-foreground">
-                {extraction.event.date}
-                {extraction.event.venue ? ` · ${extraction.event.venue}` : ''}
+                {entry.event.date}
+                {entry.event.venue ? ` · ${entry.event.venue}` : ''}
               </p>
               {lastRefreshed && (
                 <p className="text-xs text-muted-foreground">
@@ -296,10 +307,10 @@ export default function EventPage() {
                 </p>
               )}
             </div>
-            {storedEventUrl && (
+            {entry.url && (
               <button
                 type="button"
-                onClick={handleRefresh}
+                onClick={() => handleRefresh(entry)}
                 disabled={refreshing}
                 className="shrink-0 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50 transition-colors"
               >
@@ -325,8 +336,8 @@ export default function EventPage() {
               ))}
             </div>
           ))}
-        </div>
-      )}
+        </div>;
+      })}
 
       {/* ── Section 3: Meet Plan ── */}
       {meetPlan.length > 0 && (
