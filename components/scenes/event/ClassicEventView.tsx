@@ -153,7 +153,7 @@ export function ClassicEventView({ data }: { data: EventData }) {
             {storedEventUrl && (
               <button
                 type="button"
-                onClick={handleRefresh}
+                onClick={() => handleRefresh()}
                 disabled={refreshing}
                 className="shrink-0 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50 transition-colors"
               >

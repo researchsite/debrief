@@ -9,6 +9,7 @@ import { splitConversations } from '@/lib/vtt-splitter';
 import { extractAllConversations } from '@/lib/transcript-extract';
 import type { ConversationExtraction } from '@/lib/transcript-extract';
 import { roQuery } from '@/lib/graph';
+import { isMeaningfulConversation } from '@/lib/transcript-result';
 
 export interface ReviewItem {
   index: number;
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const filename = (file as File).name;
-    if (!filename.endsWith('.vtt')) {
+    if (!filename.toLowerCase().endsWith('.vtt')) {
       return NextResponse.json(
         { ok: false, error: 'Only .vtt files are supported. Audio transcription (m4a/mp3) is not yet supported.' },
         { status: 400 },
@@ -40,6 +41,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     // Parse and split
     const cues = parseVtt(vttText);
+    if (cues.length === 0) {
+      return NextResponse.json({ ok: false, error: 'No readable transcript cues found. Upload a valid .vtt transcript with timestamps and spoken text.' }, { status: 400 });
+    }
     const chunks = splitConversations(cues);
 
     // Extract conversation metadata via OpenAI
@@ -51,6 +55,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       const extraction = extractions[i];
+      if (!isMeaningfulConversation(extraction)) continue;
       const name = extraction.who.name ?? '';
 
       let candidates: { name: string; linkedinUrl: string; headline: string }[] = [];
@@ -89,7 +94,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       });
     }
 
-    return NextResponse.json({ ok: true, items, filename });
+    return NextResponse.json({ ok: true, items, filename, ignoredCount: chunks.length - items.length });
   } catch (err) {
     console.error('[/api/transcripts]', err);
     return NextResponse.json(

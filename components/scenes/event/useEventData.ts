@@ -71,6 +71,7 @@ export function useEventData() {
   const [meetPlan, setMeetPlan] = useState<MeetPlanEntry[]>([]);
   const [metSet, setMetSet] = useState<Set<string>>(new Set());
   const [storedEventUrl, setStoredEventUrl] = useState('');
+  const [eventUrls, setEventUrls] = useState<Record<string, string>>({});
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [loadState, setLoadState] = useState<LoadState>('loading');
   const [loadError, setLoadError] = useState('');
@@ -84,8 +85,10 @@ export function useEventData() {
       .then((data: {
         ok: boolean;
         error?: string;
-        event?: { name: string; date: string; venue: string; url: string } | null;
-        sessions?: ExtractedSession[];
+        events?: Array<{
+          name: string; date: string; venue: string; url: string;
+          sessions: Array<ExtractedSession & { speakerNames?: string[] }>;
+        }>;
         meetPlan?: MeetPlanEntry[];
       }) => {
         if (cancelled) return;
@@ -94,20 +97,26 @@ export function useEventData() {
           setLoadState('error');
           return;
         }
-        if (data.event?.name) {
-          const loaded: EventExtraction = {
-            event: { name: data.event.name, date: data.event.date, venue: data.event.venue },
-            sessions: (data.sessions ?? []).map((s) => ({
-              ...s,
-              // Graph returns speakerNames string[]; convert to ExtractedSpeaker[]
-              speakers: s.speakers ?? (s as unknown as { speakerNames?: string[] }).speakerNames?.map(
-                (name) => ({ name, title: '', company: '', linkedin_url: '' })
-              ) ?? [],
-            })),
-          };
-          setExtraction(loaded);
-          setEvents((prev) => upsertEvent(prev, loaded));
-          setStoredEventUrl(data.event.url ?? '');
+        const stored = (data.events ?? []).filter((e) => e.name);
+        const loaded: EventExtraction[] = stored.map((e) => ({
+          event: { name: e.name, date: e.date, venue: e.venue },
+          sessions: (e.sessions ?? []).map((s) => ({
+            ...s,
+            // Graph returns speakerNames string[]; convert to ExtractedSpeaker[]
+            speakers: s.speakers ?? s.speakerNames?.map(
+              (name) => ({ name, title: '', company: '', linkedin_url: '' })
+            ) ?? [],
+          })),
+        }));
+        setEvents((prev) => loaded.reduce(upsertEvent, prev));
+        setEventUrls((prev) => ({
+          ...prev,
+          ...Object.fromEntries(stored.filter((e) => e.url).map((e) => [e.name, e.url])),
+        }));
+        const primary = stored.find((e) => e.url) ?? stored[0];
+        if (primary) {
+          setExtraction(loaded[stored.indexOf(primary)]);
+          setStoredEventUrl(primary.url ?? '');
         }
         if (data.meetPlan && data.meetPlan.length > 0) setMeetPlan(data.meetPlan);
         setLoadError('');
@@ -128,11 +137,16 @@ export function useEventData() {
     setReloadKey((k) => k + 1);
   }, []);
 
-  async function handleRefresh() {
+  /** Re-scrapes the schedule for `eventName` (defaults to the primary stored event). */
+  async function handleRefresh(eventName?: string) {
     setError('');
     setRefreshing(true);
     try {
-      const res = await fetch('/api/event/refresh', { method: 'POST' });
+      const res = await fetch('/api/event/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventName: eventName ?? extraction?.event.name }),
+      });
       const data = (await res.json()) as {
         ok: boolean;
         extraction?: EventExtraction;
@@ -188,6 +202,7 @@ export function useEventData() {
         setExtraction(next);
         setEvents((prev) => upsertEvent(prev, next));
         setStoredEventUrl((prev) => prev || url.trim());
+        setEventUrls((prev) => ({ ...prev, [next.event.name]: url.trim() }));
         setLoadState('ready');
         return next;
       }
@@ -225,6 +240,7 @@ export function useEventData() {
     meetPlan,
     metSet,
     storedEventUrl,
+    eventUrls,
     lastRefreshed,
     loadState,
     loadError,

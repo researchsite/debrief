@@ -323,7 +323,7 @@ export function EventScene({ data }: { data: EventData }) {
       {/* Refresh chip for the stored event */}
       {storedEventUrl && activeEvent && (
         <div className="absolute left-3 top-2 z-20 flex flex-col items-start gap-1">
-          <button type="button" className="px-btn text-xs !px-2 !py-1" onClick={handleRefresh} disabled={refreshing}>
+          <button type="button" className="px-btn text-xs !px-2 !py-1" onClick={() => handleRefresh(activeEvent?.event.name)} disabled={refreshing}>
             {refreshing ? 'Refreshing…' : 'Refresh schedule'}
           </button>
           {lastRefreshed && (

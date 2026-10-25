@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { ReviewItem } from '@/app/api/transcripts/route';
 import Link from 'next/link';
+import { CONVERSATION_CATEGORIES, normalizeConversationExtraction, transcriptPersonName, transcriptPersonUrl } from '@/lib/transcript-result';
 
 type PageState = 'upload' | 'analyzing' | 'review' | 'done';
 
@@ -15,6 +16,7 @@ interface ConfirmState {
     personName: string;
     skip: boolean;
     confirmed: boolean;
+    isPrivate: boolean;
   };
 }
 
@@ -51,11 +53,13 @@ export default function TranscriptImportPage() {
   const [savedCount, setSavedCount] = useState(0);
   const [savedPeople, setSavedPeople] = useState<{ name: string; url: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [ignoredCount, setIgnoredCount] = useState(0);
+  const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selected = e.target.files?.[0];
-    if (selected) setFile(selected);
+    if (selected) { setFile(selected); setError(null); }
   };
 
   const handleAnalyze = async () => {
@@ -68,7 +72,7 @@ export default function TranscriptImportPage() {
       formData.append('file', file);
 
       const resp = await fetch('/api/transcripts', { method: 'POST', body: formData });
-      const data = (await resp.json()) as { ok: boolean; items?: ReviewItem[]; filename?: string; error?: string };
+      const data = (await resp.json()) as { ok: boolean; items?: ReviewItem[]; filename?: string; error?: string; ignoredCount?: number };
 
       if (!data.ok || !data.items) {
         setError(data.error ?? 'Failed to analyze transcript');
@@ -76,18 +80,22 @@ export default function TranscriptImportPage() {
         return;
       }
 
-      setReviewItems(data.items);
-      setFilename(data.filename ?? file.name);
+      const items = data.items.map((item) => ({ ...item, extraction: normalizeConversationExtraction(item.extraction) }));
+      const importedFilename = data.filename ?? file.name;
+      setReviewItems(items);
+      setFilename(importedFilename);
+      setIgnoredCount(data.ignoredCount ?? 0);
 
       // Initialize confirm state
       const initial: ConfirmState = {};
-      for (const item of data.items) {
+      for (const item of items) {
         const topCandidate = item.candidates[0];
         initial[item.index] = {
-          personUrl: topCandidate?.linkedinUrl ?? `placeholder:${item.extraction.who.name.replace(/\s+/g, '-').toLowerCase()}`,
-          personName: item.extraction.who.name,
+          personUrl: topCandidate?.linkedinUrl || transcriptPersonUrl(item.extraction.who.name, importedFilename, item.index),
+          personName: topCandidate?.name || transcriptPersonName(item.extraction.who.name, item.index),
           skip: false,
           confirmed: false,
+          isPrivate: true,
         };
       }
       setConfirmState(initial);
@@ -100,6 +108,18 @@ export default function TranscriptImportPage() {
 
   const handleConfirm = (index: number) => {
     setConfirmState((prev) => ({ ...prev, [index]: { ...prev[index], confirmed: true, skip: false } }));
+  };
+
+  const handlePersonName = (index: number, personName: string) => {
+    setConfirmState((prev) => ({
+      ...prev,
+      [index]: {
+        ...prev[index],
+        personName,
+        personUrl: transcriptPersonUrl(personName.trim(), filename, index),
+        confirmed: false,
+      },
+    }));
   };
 
   const handleSkip = (index: number) => {
@@ -115,8 +135,9 @@ export default function TranscriptImportPage() {
         ...prev,
         [index]: {
           ...prev[index],
-          personUrl: `placeholder:${item.extraction.who.name.replace(/\s+/g, '-').toLowerCase()}`,
-          personName: item.extraction.who.name,
+          personUrl: transcriptPersonUrl(item.extraction.who.name, filename, item.index),
+          personName: transcriptPersonName(item.extraction.who.name, item.index),
+          confirmed: false,
         },
       }));
     } else {
@@ -127,22 +148,27 @@ export default function TranscriptImportPage() {
           ...prev[index],
           personUrl: value,
           personName: candidate?.name ?? prev[index].personName,
+          confirmed: false,
         },
       }));
     }
   };
 
   const handleSaveAll = async () => {
+    if (saving || !reviewItems.some((item) => confirmState[item.index]?.confirmed)) return;
+    setSaving(true);
+    setError(null);
     const confirms = reviewItems.map((item) => {
       const state = confirmState[item.index];
       return {
         index: item.index,
         personUrl: state?.personUrl ?? `placeholder:${item.index}`,
-        personName: state?.personName ?? item.extraction.who.name,
+        personName: state?.personName?.trim() || transcriptPersonName(item.extraction.who.name, item.index),
         starts: item.starts,
         ends: item.ends,
         extraction: item.extraction,
-        skip: state?.skip ?? false,
+        skip: !state?.confirmed || state.skip,
+        isPrivate: state?.isPrivate ?? true,
       };
     });
 
@@ -167,6 +193,8 @@ export default function TranscriptImportPage() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -258,6 +286,12 @@ export default function TranscriptImportPage() {
         <p className="text-sm text-muted-foreground">
           Found {reviewItems.length} conversation{reviewItems.length !== 1 ? 's' : ''} in {filename}
         </p>
+        {ignoredCount > 0 && (
+          <p className="text-sm text-muted-foreground">Ignored {ignoredCount} segment{ignoredCount !== 1 ? 's' : ''} containing only noise or small talk.</p>
+        )}
+        {reviewItems.length === 0 && (
+          <p className="text-sm text-muted-foreground">No substantive conversations found. Try a transcript containing useful discussion, decisions, or commitments.</p>
+        )}
 
         {reviewItems.map((item) => {
           const state = confirmState[item.index];
@@ -285,14 +319,11 @@ export default function TranscriptImportPage() {
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
-                {/* Conversation excerpt */}
-                <div className="bg-muted/50 rounded-lg px-3 py-2">
-                  <p className="text-xs text-muted-foreground font-mono leading-relaxed line-clamp-3">
-                    {item.text.slice(0, 200)}
-                    {item.text.length > 200 ? '…' : ''}
-                  </p>
+                <Badge variant="secondary" className="self-start">{CONVERSATION_CATEGORIES[extraction.category]}</Badge>
+                <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 text-xs text-amber-900">
+                  <span aria-hidden="true">🔒</span>
+                  <span><strong>Private by default.</strong> This conversation stays in your private memory graph. Turn this off only if you intend to share it.</span>
                 </div>
-
                 {/* Extracted person info */}
                 <p className="text-sm">
                   Talked with{' '}
@@ -307,8 +338,48 @@ export default function TranscriptImportPage() {
                   )}
                 </p>
 
+                {!item.candidates.length && (
+                  <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <label htmlFor={`person-${item.index}`} className="text-xs font-medium">Add person</label>
+                      <span className="text-xs text-muted-foreground">Optional</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Unknown speaker? Add a name so this conversation can be connected to a person.</p>
+                    <input
+                      id={`person-${item.index}`}
+                      value={state?.personName?.startsWith('Unknown person') ? '' : state?.personName ?? ''}
+                      onChange={(event) => handlePersonName(item.index, event.target.value)}
+                      placeholder="Person's name"
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    />
+                  </div>
+                )}
+
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={state?.isPrivate ?? true}
+                    onChange={(event) => setConfirmState((prev) => ({ ...prev, [item.index]: { ...prev[item.index], isPrivate: event.target.checked } }))}
+                  />
+                  Keep this conversation private
+                </label>
+
                 {/* Summary */}
                 <p className="text-sm text-muted-foreground">{extraction.summary}</p>
+                {extraction.key_points.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium mb-1">Key points</p>
+                    <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5">
+                      {extraction.key_points.map((point, index) => <li key={index}>{point}</li>)}
+                    </ul>
+                  </div>
+                )}
+                <details className="text-xs text-muted-foreground">
+                  <summary className="cursor-pointer">Transcript excerpt</summary>
+                  <p className="mt-2 bg-muted/50 rounded-lg px-3 py-2 whitespace-pre-wrap font-mono leading-relaxed">
+                    {item.text}
+                  </p>
+                </details>
 
                 {/* Candidate picker */}
                 {item.candidates.length > 0 && (
@@ -316,7 +387,7 @@ export default function TranscriptImportPage() {
                     <label className="text-xs text-muted-foreground block mb-1">Match to existing person</label>
                     <select
                       className="w-full text-sm border border-border rounded-md px-2 py-1.5 bg-background"
-                      value={state?.personUrl ?? ''}
+                      value={item.candidates.some((candidate) => candidate.linkedinUrl === state?.personUrl) ? state?.personUrl : '__new__'}
                       onChange={(e) => handlePersonSelect(item.index, e.target.value, reviewItems)}
                     >
                       {item.candidates.map((c) => (
@@ -388,10 +459,10 @@ export default function TranscriptImportPage() {
 
         <Button
           className="w-full"
-          disabled={!allActioned}
+          disabled={saving || !allActioned || !reviewItems.some((item) => confirmState[item.index]?.confirmed)}
           onClick={handleSaveAll}
         >
-          Save confirmed conversations
+          {saving ? 'Saving…' : 'Save confirmed conversations'}
         </Button>
       </div>
     );

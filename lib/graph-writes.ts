@@ -18,21 +18,18 @@ export async function writeSession(input: SessionInput, graphName?: string): Pro
   const { title, starts, ends, room, abstract, eventName, speakerUrl } = input;
 
   await query(
-    'MERGE (s:Session {title: $title}) SET s.starts = $starts, s.ends = $ends, s.room = $room, s.abstract = $abstract',
-    { title, starts, ends, room, abstract },
-    graphName,
-  );
-
-  await query(
-    'MATCH (s:Session {title: $title}) MATCH (e:Event {name: $eventName}) MERGE (s)-[:PART_OF]->(e)',
-    { title, eventName },
+    `MATCH (e:Event {name: $eventName})
+     MERGE (s:Session {title: $title, eventName: $eventName})
+     SET s.starts = $starts, s.ends = $ends, s.room = $room, s.abstract = $abstract
+     MERGE (s)-[:PART_OF]->(e)`,
+    { title, eventName, starts, ends, room, abstract },
     graphName,
   );
 
   if (speakerUrl) {
     await query(
-      'MATCH (p:Person {linkedin_url: $speakerUrl}) MATCH (s:Session {title: $title}) MERGE (p)-[:SPEAKS_AT]->(s)',
-      { speakerUrl, title },
+      'MATCH (p:Person {linkedin_url: $speakerUrl}) MATCH (s:Session {title: $title, eventName: $eventName}) MERGE (p)-[:SPEAKS_AT]->(s)',
+      { speakerUrl, title, eventName },
       graphName,
     );
   }
@@ -609,6 +606,8 @@ export interface ConversationSaveInput {
   topics: string[];
   promises: string[];
   followUpNeeded: boolean;
+  category?: string;
+  isPrivate?: boolean;
 }
 
 export async function writeConversation(input: ConversationSaveInput, graphName?: string): Promise<void> {
@@ -631,8 +630,9 @@ export async function writeConversation(input: ConversationSaveInput, graphName?
   // 1. MERGE Conversation node
   await query(
     `MERGE (conv:Conversation {starts: $starts, ends: $ends})
-     SET conv.summary = $summary, conv.excerpt = left($summary, 100)`,
-    { starts, ends, summary },
+     SET conv.summary = $summary, conv.excerpt = left($summary, 100), conv.category = $category,
+         conv.is_private = $isPrivate`,
+    { starts, ends, summary, category: input.category ?? 'other', isPrivate: input.isPrivate ?? true },
     graphName,
   );
 
@@ -1228,6 +1228,22 @@ export interface StoredEvent {
   url: string;
 }
 
+export async function getStoredEvents(graphName?: string): Promise<StoredEvent[]> {
+  const result = await roQuery(
+    `MATCH (e:Event) WHERE e.name <> ''
+     RETURN e.name AS name, e.date AS date, e.venue AS venue, e.url AS url
+     ORDER BY name`,
+    {},
+    graphName,
+  );
+  return (result.data ?? []).map((row: Record<string, unknown>) => ({
+    name: String(row.name ?? ''),
+    date: String(row.date ?? ''),
+    venue: String(row.venue ?? ''),
+    url: String(row.url ?? ''),
+  }));
+}
+
 export async function getStoredEvent(graphName?: string): Promise<StoredEvent | null> {
   const result = await roQuery(
     `MATCH (e:Event) WHERE e.name <> ''
@@ -1247,15 +1263,16 @@ export async function getStoredEvent(graphName?: string): Promise<StoredEvent | 
   };
 }
 
-export async function getSessions(graphName?: string): Promise<StoredSession[]> {
+export async function getSessions(graphName?: string, eventName?: string): Promise<StoredSession[]> {
   const result = await roQuery(
-    `MATCH (s:Session)
+    `MATCH (s:Session)-[:PART_OF]->(e:Event)
+     ${eventName ? 'WHERE e.name = $eventName' : ''}
      OPTIONAL MATCH (p:Person)-[:SPEAKS_AT]->(s)
      RETURN s.title AS title, s.starts AS starts, s.ends AS ends,
             s.room AS room, s.abstract AS abstract,
             collect(p.name) AS speakerNames
      ORDER BY s.starts`,
-    {},
+    eventName ? { eventName } : {},
     graphName,
   );
   return (result.data ?? []).map((row: Record<string, unknown>) => ({

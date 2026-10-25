@@ -38,7 +38,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} ${pixelFont.variable} ${pixelBodyFont.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-[var(--px-paper)] text-foreground">
+      <body
+        className="min-h-full flex flex-col bg-[var(--px-paper)] text-foreground"
+        suppressHydrationWarning
+      >
         <div className="flex flex-col min-h-svh w-full mx-auto relative">
           <main className="flex-1 flex flex-col overflow-y-auto pb-16">
             <PageFade>{children}</PageFade>
