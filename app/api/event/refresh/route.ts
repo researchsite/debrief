@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractEventFromUrl } from '@/lib/event-extract';
+
+export const maxDuration = 120;
 import { getStoredEvents, getSessions, getMeetPlan } from '@/lib/graph-writes';
 import fs from 'fs';
 import path from 'path';

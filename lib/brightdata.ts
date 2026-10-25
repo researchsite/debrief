@@ -144,9 +144,8 @@ export async function serpSearch(
     return text ? [{ url: requestBody.url, title: `Google results for ${query}`, snippet: text.slice(0, 4000) }] : [];
   }
 
-  const result = (await response.json()) as { status_code: number; body: string };
-  const html = result.body ?? '';
-  return parseSerpHtml(html);
+  const result = (await response.json()) as { status_code: number; body: string | BDSerpResponse };
+  return parseSerpHtml(result.body ?? '');
 }
 
 /**
@@ -195,15 +194,17 @@ interface BDSerpResponse {
   organic?: BDSerpOrganic[];
 }
 
-function parseSerpHtml(body: string): SerpResult[] {
+function parseSerpHtml(body: string | BDSerpResponse): SerpResult[] {
   try {
-    const parsed = JSON.parse(body) as BDSerpResponse;
+    // Bright Data with format:'json' may return body as a pre-parsed object
+    const parsed: BDSerpResponse = typeof body === 'string' ? JSON.parse(body) as BDSerpResponse : body;
     return (parsed.organic ?? []).slice(0, 5).map((r) => ({
       url: r.link ?? '',
       title: r.title ?? '',
       snippet: r.description ?? '',
     }));
   } catch {
+    if (typeof body !== 'string') return [];
     const results: SerpResult[] = [];
     const headingPattern = /<h3[^>]*>([\s\S]*?)<\/h3>/gi;
     const hrefPattern = /href=\\?["']([^"']+)\\?["']/gi;

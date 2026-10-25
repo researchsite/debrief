@@ -346,10 +346,10 @@ export default function SetupPage() {
                 tabIndex={0}
                 onClick={() => toggleIntent(value)}
                 onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleIntent(value)}
-                className={`relative flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors text-sm cursor-pointer select-none ${
+                className={`relative flex flex-col items-start gap-0.5 rounded-lg border-2 px-3 py-2 text-left transition-colors text-sm cursor-pointer select-none ${
                   selected
-                    ? 'border-primary bg-primary/10 text-foreground'
-                    : 'border-border bg-background text-muted-foreground hover:bg-muted'
+                    ? 'border-[var(--px-ink)] bg-[var(--px-sun)] text-[var(--px-ink)] shadow-[3px_3px_0_0_var(--px-ink)]'
+                    : 'border-border bg-background text-muted-foreground hover:bg-[var(--px-cream)] hover:border-[var(--px-ink)]'
                 }`}
               >
                 <span className="text-base leading-none">{emoji}</span>
