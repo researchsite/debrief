@@ -1,0 +1,282 @@
+/* Recap scene: smooth, softly shaded look. All selectors are rcp- prefixed. */
+
+.rcp-root {
+  --rcp-ink: #251d45;
+  --rcp-muted: #6b6390;
+  --rcp-purple: #7c4dff;
+  --rcp-purple-deep: #5b34d6;
+  --rcp-line: rgba(91, 78, 148, 0.14);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  color: var(--rcp-ink);
+  background:
+    radial-gradient(ellipse 55% 45% at 82% 8%, rgba(255, 207, 128, 0.42), transparent 70%),
+    radial-gradient(ellipse 60% 50% at 10% 70%, rgba(255, 122, 182, 0.16), transparent 70%),
+    linear-gradient(180deg, #2f2659 0%, #463b7c 46%, #5b4e94 78%, #6a5aa3 100%);
+}
+
+.rcp-bokeh {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.rcp-floor {
+  background:
+    linear-gradient(180deg, rgba(255, 220, 160, 0.35), transparent 30%),
+    repeating-linear-gradient(90deg, transparent 0 118px, rgba(60, 32, 14, 0.22) 118px 120px),
+    linear-gradient(180deg, #b98452 0%, #a46d42 55%, #87552f 100%);
+  box-shadow: 0 -6px 24px rgba(20, 12, 40, 0.35);
+}
+
+.rcp-trail {
+  position: absolute;
+  border-radius: 9999px;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation-name: rcp-train;
+  animation-timing-function: cubic-bezier(0.45, 0.05, 0.55, 0.95);
+  animation-iteration-count: infinite;
+  background: radial-gradient(circle at 35% 30%, #ffffff 0%, #fff8ea 55%, #f1e4cf 100%);
+  box-shadow:
+    0 0 0 1.5px rgba(124, 77, 255, 0.18),
+    0 6px 14px rgba(20, 12, 40, 0.35);
+}
+
+.rcp-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 77, 255, 0.35) transparent;
+}
+
+.rcp-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rcp-purple);
+}
+
+.rcp-title {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+}
+
+.rcp-card {
+  background: linear-gradient(180deg, #ffffff 0%, #fdfaff 100%);
+  border: 1px solid var(--rcp-line);
+  border-radius: 20px;
+  box-shadow:
+    0 1px 2px rgba(37, 29, 69, 0.06),
+    0 8px 24px -8px rgba(37, 29, 69, 0.18);
+}
+
+.rcp-item {
+  background: #faf7ff;
+  border: 1px solid var(--rcp-line);
+  border-radius: 14px;
+}
+
+.rcp-item--warm {
+  background: linear-gradient(180deg, #fff9ec 0%, #fff3da 100%);
+  border-color: rgba(176, 122, 74, 0.2);
+}
+
+.rcp-stat {
+  border-radius: 18px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 8px 18px -8px rgba(37, 29, 69, 0.45);
+}
+
+.rcp-stat-value {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.rcp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 9999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rcp-why {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 9999px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(180deg, #9a72ff 0%, #6c3ff0 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 4px 12px -2px rgba(108, 63, 240, 0.55);
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+
+.rcp-why:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 6px 16px -2px rgba(108, 63, 240, 0.65);
+}
+
+.rcp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 9999px;
+  padding: 0.55rem 1.1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #2a1d05;
+  background: linear-gradient(180deg, #ffe27a 0%, #ffc72c 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 4px 12px -3px rgba(214, 150, 0, 0.6);
+  transition: transform 120ms ease, filter 120ms ease;
+  cursor: pointer;
+}
+
+.rcp-btn:hover {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+}
+
+.rcp-btn:active {
+  transform: translateY(0);
+}
+
+.rcp-btn--ghost {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  color: var(--rcp-purple-deep);
+  background: #fff;
+  border: 1px solid rgba(124, 77, 255, 0.3);
+  box-shadow: 0 2px 6px -2px rgba(37, 29, 69, 0.2);
+}
+
+.rcp-why:focus-visible,
+.rcp-btn:focus-visible,
+.rcp-link:focus-visible {
+  outline: 2px solid var(--rcp-purple);
+  outline-offset: 2px;
+}
+
+.rcp-link {
+  font-weight: 650;
+  color: #3b4fd8;
+  border-radius: 4px;
+}
+
+.rcp-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.rcp-loader {
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  border: 3.5px solid rgba(124, 77, 255, 0.18);
+  border-top-color: var(--rcp-purple);
+  animation: rcp-spin 0.8s linear infinite;
+}
+
+.rcp-loader--sm {
+  width: 20px;
+  height: 20px;
+  border-width: 2.5px;
+}
+
+@keyframes rcp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rcp-loader {
+    animation-duration: 2.4s;
+  }
+}
+
+.rcp-fade {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%);
+}
+
+/* Living bubble: the cloud layer floats and its scallops breathe unevenly. Content never moves. */
+.rcp-float {
+  animation: rcp-float 7s ease-in-out infinite;
+  will-change: transform;
+}
+
+.rcp-breathe {
+  transform-origin: 50% 55%;
+  animation: rcp-breathe 11s ease-in-out infinite;
+}
+
+.rcp-puff {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation-name: rcp-puff;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes rcp-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes rcp-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  30% { transform: scale(1.012, 0.99); }
+  65% { transform: scale(0.992, 1.014); }
+}
+
+@keyframes rcp-puff {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(1.08); }
+  70% { transform: scale(0.94); }
+}
+
+/* Each trail bubble spawns at the head, swells as it rises, then shrinks into the back of the cloud. */
+@keyframes rcp-train {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.25); }
+  12% { opacity: 1; }
+  45% { transform: translate(calc(var(--dx) * 0.42 - 4px), calc(var(--dy) * 0.45)) scale(0.7); }
+  78% { opacity: 1; transform: translate(calc(var(--dx) * 0.8), calc(var(--dy) * 0.8)) scale(1); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.35); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rcp-float,
+  .rcp-breathe,
+  .rcp-puff {
+    animation: none;
+  }
+
+  .rcp-trail {
+    animation: none;
+    opacity: 1;
+    transform: translate(calc(var(--dx) * var(--p)), calc(var(--dy) * var(--p))) scale(calc(0.45 + var(--p) * 0.55));
+  }
+
+  .rcp-trail--extra {
+    display: none !important;
+  }
+}

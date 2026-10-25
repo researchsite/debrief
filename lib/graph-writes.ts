@@ -818,12 +818,16 @@ export async function getTodayTimeline(graphName?: string): Promise<TimelineEntr
 
   const entries: TimelineEntry[] = [];
 
-  // 1. People MET today
+  // 1. People MET today. Every capture writes its own MET edge, so collapse
+  // them to one row per person at the most recent meeting time. The today
+  // filter must sit on the MET match itself, not on the OPTIONAL MATCH.
   const metResult = await roQuery(
     `MATCH (me:Me)-[r:MET]->(p:Person)
-     OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
      WHERE r.at > $todayStart
-     RETURN p.name AS name, c.name AS company, r.at AS at, coalesce(p.linkedin_url, p.id) AS url`,
+     WITH p, max(r.at) AS at
+     OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
+     WITH p, at, collect(c.name) AS companies
+     RETURN p.name AS name, head(companies) AS company, at, coalesce(p.linkedin_url, p.id) AS url`,
     { todayStart },
     graphName,
   );

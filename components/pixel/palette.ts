@@ -1,0 +1,23 @@
+/** Shared pixel palette; mirrors the --px-* CSS tokens in app/globals.css. */
+export const PX = {
+  ink: '#1b1530',
+  night: '#2a2350',
+  paper: '#fff7e6',
+  cream: '#ffe9c2',
+  sky: '#7fd3ff',
+  grass: '#6bd66b',
+  leaf: '#2f9e5a',
+  sun: '#ffd23f',
+  orange: '#ff8c42',
+  red: '#ff4f5e',
+  pink: '#ff7ab6',
+  purple: '#8b5cf6',
+  blue: '#3b82f6',
+  teal: '#22c3b5',
+  skin: '#f2c094',
+  skinShade: '#d99a6c',
+  hair: '#3b2a20',
+  wood: '#b07a4a',
+  stone: '#8c8aa3',
+  white: '#ffffff',
+} as const;

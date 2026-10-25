@@ -11,6 +11,8 @@ afterAll(async () => {
   await query('MATCH (n:Idea {text: "Graphs are fast"}) DETACH DELETE n', {}, G);
   await query('MATCH (n:Topic {name: "graph databases"}) DETACH DELETE n', {}, G);
   await query('MATCH (n:Person {name: "Test Speaker"}) DETACH DELETE n', {}, G);
+  await query('MATCH (n:Person) WHERE n.id IN ["test-timeline-repeat", "test-timeline-yesterday"] DETACH DELETE n', {}, G);
+  await query('MATCH (n:Company {name: "TimelineCo"}) DETACH DELETE n', {}, G);
 });
 
 describe('writeTalkNote', () => {
@@ -38,6 +40,30 @@ describe('getTodayTimeline', () => {
     const timeline = await getTodayTimeline(G);
     const talkEntry = timeline.find(e => e.type === 'talk' && e.title === 'Test Talk');
     expect(talkEntry).toBeDefined();
+  });
+
+  it('lists a person met several times once, at the latest meeting today', async () => {
+    const now = new Date();
+    const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const yesterday = todayStart - 60 * 60 * 1000;
+    const earlier = todayStart + 1000;
+    const latest = todayStart + 2000;
+    await query(
+      `MATCH (me:Me {linkedin_url: $url})
+       CREATE (p:Person {id: 'test-timeline-repeat', name: 'Timeline Repeat'})-[:WORKS_AT]->(:Company {name: 'TimelineCo'}),
+              (y:Person {id: 'test-timeline-yesterday', name: 'Timeline Yesterday'}),
+              (me)-[:MET {at: $yesterday}]->(p),
+              (me)-[:MET {at: $earlier}]->(p),
+              (me)-[:MET {at: $latest}]->(p),
+              (me)-[:MET {at: $yesterday}]->(y)`,
+      { url: ME_URL, yesterday, earlier, latest }, G,
+    );
+
+    const timeline = await getTodayTimeline(G);
+    const rows = timeline.filter(e => e.type === 'person' && e.title === 'Timeline Repeat');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ timestamp: latest, subtitle: 'TimelineCo' });
+    expect(timeline.some(e => e.title === 'Timeline Yesterday')).toBe(false);
   });
 });
 

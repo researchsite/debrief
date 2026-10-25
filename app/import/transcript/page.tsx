@@ -201,7 +201,7 @@ export default function TranscriptImportPage() {
   // State 1: Upload
   if (pageState === 'upload') {
     return (
-      <div className="flex flex-col px-4 pt-8 pb-4 gap-6">
+      <div className="flex flex-col px-4 pt-8 pb-4 gap-6 w-full max-w-[420px] mx-auto">
         <div className="text-center">
           <h1 className="text-2xl font-semibold text-foreground mb-1">Import Transcript</h1>
           <p className="text-muted-foreground text-sm">
@@ -275,7 +275,7 @@ export default function TranscriptImportPage() {
     );
 
     return (
-      <div className="flex flex-col px-4 pt-6 pb-4 gap-4">
+      <div className="flex flex-col px-4 pt-6 pb-4 gap-4 w-full max-w-[420px] mx-auto">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Review Conversations</h1>
           <Button variant="outline" size="sm" onClick={() => setPageState('upload')}>

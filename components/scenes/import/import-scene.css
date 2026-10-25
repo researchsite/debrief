@@ -1,0 +1,120 @@
+/* Import camera scene. Global classes, all prefixed with imp-. */
+
+.imp-stage {
+  --u: 4px;
+  --h: 4px;
+  --imp-body: #2f2b40;
+  --imp-body-hi: #4a4562;
+  --imp-body-lo: #1f1b2e;
+  /* Fake 3/4 view: depth of the side face, and the lens barrel's visible length. */
+  --imp-side: 9px;
+  --imp-lens-len: 64px;
+  --imp-ridge: 3px;
+  /* How far the body sits left of centre to leave room for the side and lens. */
+  --imp-shift: 36px;
+}
+@media (min-width: 640px) {
+  .imp-stage { --u: 5px; --h: 7px; --imp-side: 14px; --imp-lens-len: 104px; --imp-ridge: 5px; --imp-shift: 64px; }
+}
+@media (min-width: 1024px) {
+  .imp-stage { --u: 6px; --h: 8px; --imp-side: 18px; --imp-lens-len: 136px; --imp-ridge: 6px; --imp-shift: 78px; }
+}
+
+/* Camera body box, kept flat so the screen stays crisp and clickable. ~70-75% of the stage. */
+.imp-body {
+  left: 50%;
+  top: 47%;
+  width: calc(100% - 140px);
+  height: calc(100% - 270px);
+  transform: translate(calc(-50% - var(--imp-shift)), -50%);
+}
+@media (min-width: 640px) {
+  .imp-body { width: min(560px, calc(100% - 240px)); height: min(420px, calc(100% - 300px)); }
+}
+@media (min-width: 1024px) {
+  .imp-body { width: min(700px, calc(100% - 320px)); height: min(400px, calc(100% - 300px)); }
+}
+
+/* Right side face: a parallelogram receding away from the viewer. */
+.imp-side {
+  left: calc(100% - 4px);
+  top: calc(var(--u) * 1);
+  bottom: calc(var(--u) * 1);
+  width: calc(var(--imp-side) + 4px);
+  clip-path: polygon(0 0, 100% calc(var(--u) * 2), 100% calc(100% - var(--u) * 2), 0 100%);
+}
+
+/* Lens barrel in profile, coming out of the side face. */
+.imp-lens {
+  left: calc(100% + var(--imp-side) - 1px);
+  top: 50%;
+  height: 54%;
+  width: var(--imp-lens-len);
+  transform: translateY(-50%);
+}
+.imp-lens-scale { font-size: 9px; gap: 1px; }
+@media (max-width: 639px) {
+  .imp-lens { height: 34%; }
+}
+@media (min-width: 640px) {
+  .imp-lens-scale { font-size: 13px; gap: 3px; }
+}
+@media (min-width: 1024px) {
+  .imp-lens-scale { font-size: 15px; gap: 5px; }
+}
+
+/* Camera keys: physical buttons that sink when pressed. */
+.imp-key {
+  cursor: pointer;
+  transition: transform 60ms steps(2), box-shadow 60ms steps(2), filter 80ms;
+}
+.imp-key:hover:not(:disabled):not([aria-disabled='true']) {
+  filter: brightness(1.12);
+}
+.imp-key:active:not(:disabled):not([aria-disabled='true']) {
+  transform: translateY(3px);
+  box-shadow: inset 0 3px 0 rgba(0, 0, 0, 0.25), 0 1px 0 #1b1530 !important;
+}
+.imp-key:disabled,
+.imp-key[aria-disabled='true'] {
+  cursor: not-allowed;
+  filter: grayscale(0.85) brightness(0.8);
+}
+.imp-key:focus-visible {
+  outline: 3px solid #ffd23f;
+  outline-offset: 2px;
+}
+
+/* Blinking REC dot on the LCD HUD. */
+@keyframes imp-blink {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: 0.15; }
+}
+.imp-rec { animation: imp-blink 1.2s steps(1) infinite; }
+
+/* Full-screen camera flash fired by the Import key. */
+@keyframes imp-flash {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes imp-flash-soft {
+  0% { opacity: 0; }
+  30% { opacity: 0.45; }
+  100% { opacity: 0; }
+}
+.imp-flash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #fff;
+  pointer-events: none;
+  opacity: 0;
+  animation: imp-flash 350ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .imp-flash { animation: imp-flash-soft 160ms linear forwards; }
+  .imp-rec { animation: none; }
+  .imp-key { transition: none; }
+}
