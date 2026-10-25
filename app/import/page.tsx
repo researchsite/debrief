@@ -60,7 +60,7 @@ export default function ImportPage() {
   const [transcripts, setTranscripts] = useState<TranscriptResult[]>([]);
   const transcriptInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [flashKey, setFlashKey] = useState(0);
   const qrQueue = useRef<{ id: string; payload: string }[]>([]);
@@ -228,7 +228,7 @@ export default function ImportPage() {
       <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-none sm:gap-3">
         <CamKey icon="🎙" accent={PX.pink} label="Import Transcript" onClick={() => pick(transcriptInputRef.current)} disabled={busy} />
         <CamKey icon="📎" accent={PX.sky} label="Pick files" onClick={() => pick(fileInputRef.current)} disabled={busy} />
-        <CamKey icon="📷" accent={PX.sun} label="Pick Photo" onClick={() => pick(cameraInputRef.current)} disabled={busy} />
+        <CamKey icon="📷" accent={PX.sun} label="Pick Photo" onClick={() => pick(imageInputRef.current)} disabled={busy} />
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center">
         {pageState === 'review' ? (
@@ -240,7 +240,7 @@ export default function ImportPage() {
         )}
       </div>
       <input ref={fileInputRef} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={handleFileChange} />
-      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
+      <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
       <input ref={transcriptInputRef} type="file" accept=".vtt,text/vtt" multiple className="hidden" onChange={handleFileChange} />
     </>
   );
