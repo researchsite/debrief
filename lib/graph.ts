@@ -19,7 +19,7 @@ let dbClient: FalkorDB | null = null;
 
 async function connect(): Promise<FalkorDB> {
   const url = process.env.FALKORDB_URL;
-  const client = await FalkorDB.connect(
+  return FalkorDB.connect(
     url
       ? { url }
       : {
@@ -28,14 +28,6 @@ async function connect(): Promise<FalkorDB> {
           ...(password && { password }),
         },
   );
-  // Clear the cached client if the underlying connection closes unexpectedly
-  // so the next query automatically reconnects.
-  const raw = (client as unknown as { connection?: { on?: (ev: string, cb: () => void) => void } }).connection;
-  if (raw?.on) {
-    raw.on('error', () => { dbClient = null; });
-    raw.on('end', () => { dbClient = null; });
-  }
-  return client;
 }
 
 async function getDb(): Promise<FalkorDB> {
@@ -51,14 +43,33 @@ export async function getGraph(name?: string): Promise<Graph> {
   return db.selectGraph(graphName);
 }
 
+function isConnectionError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message.toLowerCase() : '';
+  // Empty message = FalkorDB socket error with no text, or any recognisable connection keyword
+  return !msg || msg.includes('econnreset') || msg.includes('econnrefused') || msg.includes('socket') || msg.includes('closed') || msg.includes('writeable') || msg.includes('stream');
+}
+
+async function executeQuery<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (isConnectionError(err)) {
+      // Stale connection — clear it and try once more with a fresh connection
+      dbClient = null;
+      return await fn();
+    }
+    throw err;
+  }
+}
+
 export async function query(
   cypher: string,
   params?: Record<string, unknown>,
   graphName?: string,
 ): Promise<QueryResult> {
-  const graph = await getGraph(graphName);
-  return graph.query<Record<string, unknown>>(cypher, {
-    params: params as QueryParams,
+  return executeQuery(async () => {
+    const graph = await getGraph(graphName);
+    return graph.query<Record<string, unknown>>(cypher, { params: params as QueryParams });
   });
 }
 
@@ -67,8 +78,8 @@ export async function roQuery(
   params?: Record<string, unknown>,
   graphName?: string,
 ): Promise<QueryResult> {
-  const graph = await getGraph(graphName);
-  return graph.roQuery<Record<string, unknown>>(cypher, {
-    params: params as QueryParams,
+  return executeQuery(async () => {
+    const graph = await getGraph(graphName);
+    return graph.roQuery<Record<string, unknown>>(cypher, { params: params as QueryParams });
   });
 }

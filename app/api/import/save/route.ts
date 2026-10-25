@@ -137,9 +137,9 @@ export async function POST(request: NextRequest) {
     if (qr) await saveQrProvenance(filePath, qr, result, personId);
     return NextResponse.json({ ok: true, personId });
   } catch (err) {
-    console.error('[save] error:', err);
+    console.error('[save] error:', err instanceof Error ? (err.stack ?? err.message) : err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Save failed' },
+      { error: err instanceof Error && err.message ? err.message : 'Save failed' },
       { status: err instanceof ClassificationResultError ? 400 : 500 },
     );
   }

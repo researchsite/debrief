@@ -149,7 +149,7 @@ export default function SetupPage() {
       const res = await fetch('/api/import/profile', { method: 'POST', body: fd });
       const data = (await res.json()) as ImportResult & { error?: string };
       if (!res.ok) {
-        setImportError(data.error ?? 'Import failed');
+        setImportError(data.error || 'Import failed');
       } else {
         setImportResult(data);
       }
