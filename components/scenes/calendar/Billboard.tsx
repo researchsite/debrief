@@ -18,6 +18,7 @@ const ICONS: Record<TimelineEntry['type'], string> = {
   person: '👤',
   talk: '🎤',
   coupon: '🎟️',
+  session: '🗓',
 };
 
 export function Billboard({ state, event, sections, now, onRetry }: BillboardProps) {

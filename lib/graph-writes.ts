@@ -803,12 +803,24 @@ export async function writeTalkNote(input: TalkNoteInput, graphName?: string): P
 }
 
 export interface TimelineEntry {
-  type: 'person' | 'talk' | 'coupon';
+  type: 'person' | 'talk' | 'coupon' | 'session';
   timestamp: number;
   title: string;
   subtitle: string;
   url?: string;   // link to /person/[url] or /wallet
   details?: string;
+}
+
+function parseSessionTime(timeStr: string, todayStartMs: number): number {
+  if (!timeStr) return 0;
+  const m = timeStr.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  if (!m) return 0;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const ampm = m[3]?.toUpperCase();
+  if (ampm === 'PM' && h !== 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+  return todayStartMs + h * 3600000 + min * 60000;
 }
 
 export async function getTodayTimeline(graphName?: string): Promise<TimelineEntry[]> {
@@ -878,7 +890,34 @@ export async function getTodayTimeline(graphName?: string): Promise<TimelineEntr
     });
   }
 
-  // Sort newest first
+  // 4. Scheduled sessions from the current event
+  try {
+    const sessionResult = await roQuery(
+      `MATCH (me:Me)-[:ATTENDED]->(e:Event)<-[:PART_OF]-(s:Session)
+       OPTIONAL MATCH (p:Person)-[:SPEAKS_AT]->(s)
+       RETURN s.title AS title, s.starts AS starts, s.room AS room,
+              collect(p.name) AS speakerNames`,
+      {},
+      graphName,
+    );
+    for (const row of (sessionResult.data ?? []) as Record<string, unknown>[]) {
+      const ts = parseSessionTime(String(row.starts ?? ''), todayStart);
+      const speakerNames = (Array.isArray(row.speakerNames) ? row.speakerNames : [])
+        .map((n) => String(n))
+        .filter(Boolean);
+      const parts = [speakerNames.join(', '), row.room ? String(row.room) : ''].filter(Boolean);
+      entries.push({
+        type: 'session',
+        timestamp: ts,
+        title: String(row.title ?? 'Session'),
+        subtitle: parts.join(' · '),
+      });
+    }
+  } catch {
+    // If event sessions query fails, continue with what we have
+  }
+
+  // Sort by timestamp descending — future sessions (larger ts) float to the top
   entries.sort((a, b) => b.timestamp - a.timestamp);
 
   return entries;

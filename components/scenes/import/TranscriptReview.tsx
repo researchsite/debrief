@@ -140,6 +140,9 @@ export function TranscriptReview({ filename, items, onDismiss }: { filename: str
       </div>
       <div className="flex flex-col gap-3 p-3">
         <p className={`font-pixel-body text-lg leading-tight ${MUTED}`}>Found {items.length} conversation{items.length !== 1 ? 's' : ''}</p>
+        {items.length === 0 && (
+          <p className={`font-pixel-body text-base leading-tight ${MUTED}`}>No substantive conversations detected — the file may contain only noise or small talk.</p>
+        )}
         {items.map((item, itemIndex) => {
           const choice = choices[item.index];
           const { extraction } = item;
@@ -172,11 +175,11 @@ export function TranscriptReview({ filename, items, onDismiss }: { filename: str
               {extraction.summary && <p className={`font-pixel-body text-base leading-tight ${MUTED}`}>{extraction.summary}</p>}
 
               {/* Key points */}
-              {extraction.key_points.length > 0 && (
+              {(extraction.key_points ?? []).length > 0 && (
                 <div>
                   <p className="font-pixel text-[10px]">Key points</p>
                   <ul className="font-pixel-body text-base leading-tight">
-                    {extraction.key_points.map((pt, i) => <li key={i}><span aria-hidden>▸ </span>{pt}</li>)}
+                    {(extraction.key_points ?? []).map((pt, i) => <li key={i}><span aria-hidden>▸ </span>{pt}</li>)}
                   </ul>
                 </div>
               )}
@@ -268,7 +271,7 @@ export function TranscriptReview({ filename, items, onDismiss }: { filename: str
           );
         })}
         {error && <p role="alert" className="font-pixel-body border-2 border-[var(--px-ink)] px-2 py-1 text-base text-white" style={{ background: 'var(--px-red)' }}>{error}</p>}
-        <PxButton className="w-full" disabled={!allActioned || saving} onClick={saveAll}>
+        <PxButton className="w-full" disabled={items.length === 0 || !allActioned || saving} onClick={saveAll}>
           {saving ? 'Saving…' : 'Save confirmed conversations'}
         </PxButton>
       </div>
