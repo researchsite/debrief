@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Check, Copy, Network, Sparkles } from 'lucide-react';
 import type {
   RecapCounts,
   RecapPerson,
@@ -61,34 +62,32 @@ function WhyLink({ name }: { name: string }) {
     <Link
       href={`/why?name=${encodeURIComponent(name)}`}
       title="See the graph path behind this connection"
-      className="px-chip flex-shrink-0 bg-[color:var(--px-purple)] text-white hover:brightness-110"
+      className="rcp-why"
     >
+      <Network aria-hidden className="h-3.5 w-3.5" strokeWidth={2.5} />
       Why?
     </Link>
   );
 }
 
 const STAT_STYLES = [
-  { bg: 'var(--px-sun)', fg: 'var(--px-ink)' },
-  { bg: 'var(--px-pink)', fg: 'var(--px-ink)' },
-  { bg: 'var(--px-teal)', fg: 'var(--px-ink)' },
+  { bg: 'linear-gradient(160deg, #ffe58a 0%, #ffc72c 100%)', fg: '#3a2a00' },
+  { bg: 'linear-gradient(160deg, #ffa8cf 0%, #ff6aa8 100%)', fg: '#4a0d2b' },
+  { bg: 'linear-gradient(160deg, #7ee8dc 0%, #1fb8aa 100%)', fg: '#06362f' },
 ];
 
 function Stat({ value, label, idx }: { value: number; label: string; idx: number }) {
   const style = STAT_STYLES[idx % STAT_STYLES.length];
   return (
-    <div
-      className="px-panel px-1 py-2 text-center"
-      style={{ background: style.bg, color: style.fg }}
-    >
-      <p className="font-pixel text-4xl sm:text-5xl leading-none">{value}</p>
-      <p className="font-pixel-body text-base sm:text-lg leading-tight mt-1">{label}</p>
+    <div className="rcp-stat px-1 py-3 sm:py-4 text-center" style={{ background: style.bg, color: style.fg }}>
+      <p className="rcp-stat-value text-3xl sm:text-5xl">{value}</p>
+      <p className="mt-1 text-xs sm:text-sm font-semibold opacity-80">{label}</p>
     </div>
   );
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="font-pixel text-lg sm:text-xl leading-tight">{children}</h2>;
+  return <h2 className="rcp-title text-base sm:text-lg">{children}</h2>;
 }
 
 export default function RecapPage() {
@@ -141,8 +140,8 @@ export default function RecapPage() {
     return (
       <RecapScene>
         <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-          <div className="px-loader" />
-          <p className="font-pixel text-lg">Remembering your conference...</p>
+          <div className="rcp-loader" />
+          <p className="rcp-title text-lg">Remembering your conference...</p>
         </div>
       </RecapScene>
     );
@@ -152,9 +151,9 @@ export default function RecapPage() {
     return (
       <RecapScene>
         <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-          <p className="font-pixel text-xl" style={{ color: 'var(--px-red)' }}>Hmm, I can&apos;t recall...</p>
-          <p className="font-pixel-body text-lg">Could not load recap data.</p>
-          <button type="button" className="px-btn text-sm mt-2" onClick={() => window.location.reload()}>
+          <p className="rcp-title text-xl text-[#d93648]">Hmm, I can&apos;t recall...</p>
+          <p className="text-sm text-[color:var(--rcp-muted)]">Could not load recap data.</p>
+          <button type="button" className="rcp-btn mt-3" onClick={() => window.location.reload()}>
             Try again
           </button>
         </div>
@@ -168,13 +167,11 @@ export default function RecapPage() {
 
   return (
     <RecapScene>
-      <div className="space-y-5">
+      <div className="space-y-4 sm:space-y-5">
         {/* Header */}
-        <header>
-          <p className="font-pixel-body text-base uppercase tracking-wide" style={{ color: 'var(--px-purple)' }}>
-            Thinking back on...
-          </p>
-          <h1 className="font-pixel text-xl sm:text-3xl leading-tight">
+        <header className="space-y-1">
+          <p className="rcp-eyebrow">Thinking back on...</p>
+          <h1 className="rcp-title text-xl sm:text-3xl">
             {event?.eventName ?? 'Event'} - Your Recap
           </h1>
         </header>
@@ -187,42 +184,38 @@ export default function RecapPage() {
             <Stat value={counts.ideas} label="ideas" idx={2} />
           </div>
           {counts.connectedAndMet > 0 && (
-            <p className="font-pixel-body text-lg text-center border-2 border-dashed px-2" style={{ borderColor: 'var(--px-purple)' }}>
+            <p className="rounded-full bg-[#f1ebff] px-3 py-1.5 text-center text-sm font-medium text-[color:var(--rcp-purple-deep)]">
               {counts.connectedAndMet} connection{counts.connectedAndMet !== 1 ? 's' : ''} became real meetings
             </p>
           )}
         </section>
 
         {/* Intent card */}
-        <section className="px-panel p-3 sm:p-4 space-y-3 bg-white">
+        <section className="rcp-card space-y-3 p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2">
             <SectionTitle>{intentLabel(primaryIntent)}</SectionTitle>
-            <span className="px-chip" style={{ background: 'var(--px-sun)' }}>
+            <span className="rcp-chip bg-[#fff1c2] text-[#6b4a00]">
               {people.length} people
             </span>
           </div>
 
           {people.length === 0 ? (
-            <p className="font-pixel-body text-lg">No people found for this intent yet.</p>
+            <p className="text-sm text-[color:var(--rcp-muted)]">No people found for this intent yet.</p>
           ) : (
             <ul className="space-y-2">
               {people.map((person, i) => (
-                <li key={i} className="border-2 p-2 space-y-1" style={{ borderColor: 'var(--px-ink)', background: 'var(--px-paper)' }}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <Link
-                        href={`/person/${encodedUrl(person.linkedinUrl)}`}
-                        className="font-pixel text-base hover:underline"
-                        style={{ color: 'var(--px-blue)' }}
-                      >
+                <li key={i} className="rcp-item space-y-1 p-2.5 sm:p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <Link href={`/person/${encodedUrl(person.linkedinUrl)}`} className="rcp-link text-[0.95rem]">
                         {person.name}
                       </Link>
-                      <p className="font-pixel-body text-base leading-tight truncate">{person.company}</p>
+                      <p className="truncate text-xs text-[color:var(--rcp-muted)]">{person.company}</p>
                     </div>
                     <WhyLink name={person.name} />
                   </div>
                   {person.noteText && (
-                    <p className="font-pixel-body text-base leading-tight line-clamp-2 opacity-80">{person.noteText}</p>
+                    <p className="line-clamp-2 text-sm leading-snug text-[#4a4270]">{person.noteText}</p>
                   )}
                 </li>
               ))}
@@ -232,18 +225,16 @@ export default function RecapPage() {
 
         {/* Ideas by topic */}
         {ideas.length > 0 && (
-          <section className="px-panel p-3 sm:p-4 space-y-3 bg-white">
+          <section className="rcp-card space-y-3 p-3 sm:p-4">
             <SectionTitle>Ideas Captured</SectionTitle>
             {Array.from(ideaGroups.entries()).map(([topic, topicIdeas]) => (
               <div key={topic} className="space-y-2">
-                <h3 className="font-pixel text-xs uppercase tracking-wide" style={{ color: 'var(--px-purple)' }}>
-                  {topic}
-                </h3>
+                <h3 className="rcp-eyebrow">{topic}</h3>
                 <ul className="space-y-2">
                   {topicIdeas.map((idea, i) => (
-                    <li key={i} className="border-2 p-2" style={{ borderColor: 'var(--px-ink)', background: 'var(--px-cream)' }}>
-                      <p className="font-pixel-body text-lg leading-tight">{idea.text}</p>
-                      <p className="font-pixel-body text-base leading-tight italic opacity-75">{idea.sessionTitle}</p>
+                    <li key={i} className="rcp-item rcp-item--warm p-2.5 sm:p-3">
+                      <p className="text-sm leading-snug">{idea.text}</p>
+                      <p className="mt-0.5 text-xs italic text-[#8a6a45]">{idea.sessionTitle}</p>
                     </li>
                   ))}
                 </ul>
@@ -253,16 +244,17 @@ export default function RecapPage() {
         )}
 
         {/* Follow-ups */}
-        <section className="px-panel p-3 sm:p-4 space-y-3 bg-white">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
+        <section className="rcp-card space-y-3 p-3 sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <SectionTitle>Follow-ups</SectionTitle>
             {!generating && (
               <button
                 type="button"
                 onClick={() => void handleGenerateFollowUps()}
                 disabled={generating}
-                className="px-btn text-sm"
+                className="rcp-btn"
               >
+                <Sparkles aria-hidden className="h-4 w-4" />
                 {followUps.length === 0 ? 'Generate follow-ups' : 'Regenerate'}
               </button>
             )}
@@ -270,19 +262,19 @@ export default function RecapPage() {
 
           {generating && (
             <div className="flex items-center gap-3 py-2">
-              <div className="px-loader" />
-              <p className="font-pixel text-sm">Drafting follow-ups...</p>
+              <div className="rcp-loader rcp-loader--sm" />
+              <p className="text-sm font-medium">Drafting follow-ups...</p>
             </div>
           )}
 
           {generateError && !generating && (
-            <p role="alert" className="font-pixel-body text-lg border-2 px-2" style={{ borderColor: 'var(--px-red)', color: 'var(--px-red)' }}>
+            <p role="alert" className="rounded-xl border border-[#ffc2c8] bg-[#fff0f1] px-3 py-2 text-sm text-[#c42b3d]">
               {generateError}. Try again.
             </p>
           )}
 
           {!generating && followUps.length === 0 && (
-            <p className="font-pixel-body text-lg leading-tight">
+            <p className="text-sm leading-snug text-[color:var(--rcp-muted)]">
               No follow-ups drafted yet. Click &ldquo;Generate follow-ups&rdquo; to create AI-drafted messages.
             </p>
           )}
@@ -290,21 +282,27 @@ export default function RecapPage() {
           {followUps.length > 0 && (
             <ul className="space-y-2">
               {followUps.map((fu, i) => (
-                <li key={i} className="border-2 p-2 space-y-2" style={{ borderColor: 'var(--px-ink)', background: 'var(--px-paper)' }}>
-                  <div className="flex items-start justify-between gap-2">
+                <li key={i} className="rcp-item space-y-2 p-2.5 sm:p-3">
+                  <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-pixel text-base">{fu.personName}</p>
-                      <p className="font-pixel-body text-base leading-tight">{fu.company}</p>
+                      <p className="text-[0.95rem] font-semibold">{fu.personName}</p>
+                      <p className="text-xs text-[color:var(--rcp-muted)]">{fu.company}</p>
                     </div>
                     <WhyLink name={fu.personName} />
                   </div>
-                  <p className="font-pixel-body text-lg leading-tight whitespace-pre-wrap">{fu.message}</p>
+                  <p className="whitespace-pre-wrap rounded-xl bg-white px-3 py-2 text-sm leading-relaxed shadow-[inset_0_0_0_1px_rgba(91,78,148,0.1)]">
+                    {fu.message}
+                  </p>
                   <button
                     type="button"
                     onClick={() => void handleCopy(fu.message, i)}
-                    className="px-btn text-xs !py-1 !px-3"
-                    style={{ background: 'var(--px-sky)' }}
+                    className="rcp-btn rcp-btn--ghost"
                   >
+                    {copiedIdx === i ? (
+                      <Check aria-hidden className="h-3.5 w-3.5" />
+                    ) : (
+                      <Copy aria-hidden className="h-3.5 w-3.5" />
+                    )}
                     {copiedIdx === i ? 'Copied!' : 'Copy'}
                   </button>
                 </li>
