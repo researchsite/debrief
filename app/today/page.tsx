@@ -26,7 +26,9 @@ interface TodayApiResponse {
 }
 
 async function fetchToday(): Promise<TodayApiResponse> {
-  const res = await fetch('/api/today', { cache: 'no-store' });
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const res = await fetch(`/api/today?since=${todayStart.getTime()}`, { cache: 'no-store' });
   if (!res.ok) throw new Error(`GET /api/today failed: ${res.status}`);
   return (await res.json()) as TodayApiResponse;
 }

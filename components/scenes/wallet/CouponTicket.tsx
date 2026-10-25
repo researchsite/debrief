@@ -45,9 +45,12 @@ export function CouponTicket({ coupon, copied, onCopy, onMarkUsed }: CouponTicke
         <span className="font-pixel truncate text-base font-bold text-white [text-shadow:2px_2px_0_#1b1530]">
           {coupon.vendor || 'Unknown vendor'}
         </span>
-        {coupon.value && (
-          <span className="px-chip shrink-0 bg-[#ffd23f] text-[#1b1530]">{coupon.value}</span>
-        )}
+        <span className="flex shrink-0 items-center gap-1">
+          {coupon.sample && <span className="px-label-sample">Sample</span>}
+          {coupon.value && (
+            <span className="px-chip bg-[#ffd23f] text-[#1b1530]">{coupon.value}</span>
+          )}
+        </span>
       </header>
 
       <div className={`flex flex-col gap-2 px-3 pt-2 pb-4 ${coupon.used ? 'opacity-55' : ''}`}>

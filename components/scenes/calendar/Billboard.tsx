@@ -18,6 +18,7 @@ const ICONS: Record<TimelineEntry['type'], string> = {
   person: '👤',
   talk: '🎤',
   coupon: '🎟️',
+  plan: '🗓️',
 };
 
 export function Billboard({ state, event, sections, now, onRetry }: BillboardProps) {
@@ -91,7 +92,10 @@ function BoardRow({ entry, now }: { entry: TimelineEntry; now: number }) {
         {ICONS[entry.type]}
       </span>
       <span className={styles.rowText}>
-        <span className={styles.rowTitle}>{entry.title}</span>
+        <span className={styles.rowTitle}>
+          {entry.title}
+          {entry.sample && <span className="cal-sample-tag">Sample</span>}
+        </span>
         {entry.subtitle && <span className={styles.rowSub}>{entry.subtitle}</span>}
       </span>
       <span className={styles.rowTime}>{relativeTime(entry.timestamp, now)}</span>

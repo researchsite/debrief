@@ -46,6 +46,10 @@ export function groupByDay(entries: TimelineEntry[], now: number): DaySection[] 
     else later.set(day, [...(later.get(day) ?? []), entry]);
   }
 
+  const chronological = (list: TimelineEntry[]) => list.sort((a, b) => a.timestamp - b.timestamp);
+  chronological(tomorrowEntries);
+  for (const list of later.values()) chronological(list);
+
   const fmt = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   return [
     { key: 'today', label: 'Today', entries: todayEntries },
