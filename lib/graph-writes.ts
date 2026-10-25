@@ -533,6 +533,8 @@ export interface CouponData {
   redeemUrl: string;
   used: boolean;
   assetPath: string;
+  /** True for seeded demo data, which the UI labels as sample. */
+  sample: boolean;
 }
 
 export async function getCoupons(graphName?: string): Promise<CouponData[]> {
@@ -548,7 +550,8 @@ export async function getCoupons(graphName?: string): Promise<CouponData[]> {
             coupon.terms AS terms,
             coupon.redeem_url AS redeemUrl,
             coupon.used AS used,
-            coalesce(asset.file_path, '') AS assetPath
+            coalesce(asset.file_path, '') AS assetPath,
+            coalesce(coupon.sample, false) AS sample
      ORDER BY coupon.expires ASC`,
     {},
     graphName,
@@ -564,6 +567,7 @@ export async function getCoupons(graphName?: string): Promise<CouponData[]> {
     redeemUrl: String(row.redeemUrl ?? ''),
     used: Boolean(row.used ?? false),
     assetPath: String(row.assetPath ?? ''),
+    sample: row.sample === true,
   }));
 }
 
@@ -803,18 +807,28 @@ export async function writeTalkNote(input: TalkNoteInput, graphName?: string): P
 }
 
 export interface TimelineEntry {
-  type: 'person' | 'talk' | 'coupon';
+  type: 'person' | 'talk' | 'coupon' | 'plan';
   timestamp: number;
   title: string;
   subtitle: string;
   url?: string;   // link to /person/[url] or /wallet
   details?: string;
+  /** True for seeded demo data, which the UI labels as sample. */
+  sample?: boolean;
 }
 
-export async function getTodayTimeline(graphName?: string): Promise<TimelineEntry[]> {
-  // Start of today in epoch ms (midnight UTC)
-  const now = new Date();
-  const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+const UPCOMING_WINDOW_MS = 7 * 24 * 3600 * 1000;
+
+/**
+ * Today's captures plus sessions planned for the coming week.
+ * `todayStart` is the start of the viewer's local day in epoch ms; it
+ * defaults to midnight UTC when the caller does not know the viewer's zone.
+ */
+export async function getTodayTimeline(graphName?: string, todayStart?: number): Promise<TimelineEntry[]> {
+  if (todayStart === undefined) {
+    const now = new Date();
+    todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  }
 
   const entries: TimelineEntry[] = [];
 
@@ -827,7 +841,9 @@ export async function getTodayTimeline(graphName?: string): Promise<TimelineEntr
      WITH p, max(r.at) AS at
      OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
      WITH p, at, collect(c.name) AS companies
-     RETURN p.name AS name, head(companies) AS company, at, coalesce(p.linkedin_url, p.id) AS url`,
+     RETURN p.name AS name, head(companies) AS company, at,
+            CASE WHEN p.sample = true THEN null ELSE coalesce(p.linkedin_url, p.id) END AS url,
+            coalesce(p.sample, false) AS sample`,
     { todayStart },
     graphName,
   );
@@ -838,6 +854,7 @@ export async function getTodayTimeline(graphName?: string): Promise<TimelineEntr
       title: String(row.name ?? 'Unknown'),
       subtitle: row.company ? String(row.company) : '',
       url: row.url ? `/person/${Buffer.from(String(row.url)).toString('base64url')}` : undefined,
+      sample: row.sample === true,
     });
   }
 
@@ -846,7 +863,7 @@ export async function getTodayTimeline(graphName?: string): Promise<TimelineEntr
     `MATCH (me:Me)-[:SAW]->(s:Session)
      WHERE s.at > $todayStart
      OPTIONAL MATCH (s)-[:SPARKED]->(i:Idea)
-     RETURN s.title AS title, count(i) AS ideaCount, s.at AS at`,
+     RETURN s.title AS title, count(i) AS ideaCount, s.at AS at, coalesce(s.sample, false) AS sample`,
     { todayStart },
     graphName,
   );
@@ -857,6 +874,7 @@ export async function getTodayTimeline(graphName?: string): Promise<TimelineEntr
       timestamp: Number(row.at ?? 0),
       title: String(row.title ?? 'Unknown Talk'),
       subtitle: ideaCount === 1 ? '1 idea' : `${ideaCount} ideas`,
+      sample: row.sample === true,
     });
   }
 
@@ -864,7 +882,7 @@ export async function getTodayTimeline(graphName?: string): Promise<TimelineEntr
   const couponResult = await roQuery(
     `MATCH (c:Coupon)
      WHERE c.created_at > $todayStart
-     RETURN c.code AS code, c.vendor AS vendor, c.created_at AS at`,
+     RETURN c.code AS code, c.vendor AS vendor, c.created_at AS at, coalesce(c.sample, false) AS sample`,
     { todayStart },
     graphName,
   );
@@ -875,6 +893,25 @@ export async function getTodayTimeline(graphName?: string): Promise<TimelineEntr
       title: String(row.code ?? 'Coupon'),
       subtitle: String(row.vendor ?? ''),
       url: '/wallet',
+      sample: row.sample === true,
+    });
+  }
+
+  // 4. Sessions planned for the coming week
+  const planResult = await roQuery(
+    `MATCH (me:Me)-[:PLANS]->(s:Session)
+     WHERE s.at >= $todayStart AND s.at < $until
+     RETURN s.title AS title, s.room AS room, s.at AS at, coalesce(s.sample, false) AS sample`,
+    { todayStart, until: todayStart + UPCOMING_WINDOW_MS },
+    graphName,
+  );
+  for (const row of (planResult.data ?? []) as Record<string, unknown>[]) {
+    entries.push({
+      type: 'plan',
+      timestamp: Number(row.at ?? 0),
+      title: String(row.title ?? 'Planned session'),
+      subtitle: row.room ? `Planned · ${String(row.room)}` : 'Planned',
+      sample: row.sample === true,
     });
   }
 
