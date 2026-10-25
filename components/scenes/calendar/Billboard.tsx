@@ -26,26 +26,27 @@ export function Billboard({ state, event, sections, now, onRetry }: BillboardPro
   return (
     <section className={styles.billboard} aria-label="Schedule board">
       <div className={styles.screen}>
+        <span className={styles.glare} aria-hidden="true" />
         <header className={styles.boardHeader}>
-          <p className={`${styles.eventName} font-pixel`}>{event?.eventName ?? 'Your conference'}</p>
+          <p className={styles.eventName}>{event?.eventName ?? 'Your conference'}</p>
           {event?.primaryIntent && (
-            <span className={`px-chip ${styles.intentChip}`}>{event.primaryIntent}</span>
+            <span className={styles.intentChip}>{event.primaryIntent}</span>
           )}
         </header>
 
         <div className={styles.boardScroll}>
           {state === 'loading' && (
             <div className={styles.boardCenter} role="status">
-              <div className="px-loader" style={{ background: 'var(--px-sun)' }} />
-              <p className="font-pixel-body">Loading board...</p>
+              <div className={styles.spinner} aria-hidden="true" />
+              <p>Loading board...</p>
             </div>
           )}
 
           {state === 'error' && (
             <div className={styles.boardCenter} role="alert">
-              <p className={`${styles.errorText} font-pixel`}>Board offline</p>
-              <p className="font-pixel-body">Could not load today&apos;s timeline.</p>
-              <button type="button" className="px-btn" onClick={onRetry}>
+              <p className={styles.errorText}>Board offline</p>
+              <p>Could not load today&apos;s timeline.</p>
+              <button type="button" className={styles.btn} onClick={onRetry}>
                 Retry
               </button>
             </div>
@@ -53,9 +54,7 @@ export function Billboard({ state, event, sections, now, onRetry }: BillboardPro
 
           {state === 'ready' && isEmpty && (
             <div className={styles.boardCenter}>
-              <p className="font-pixel-body">
-                Nothing captured yet today. Tap + to add your first person or talk.
-              </p>
+              <p>Nothing captured yet today. Tap + to add your first person or talk.</p>
             </div>
           )}
 
@@ -63,9 +62,9 @@ export function Billboard({ state, event, sections, now, onRetry }: BillboardPro
             !isEmpty &&
             sections.map((section) => (
               <div key={section.key} className={styles.daySection}>
-                <h2 className={`${styles.dayLabel} font-pixel`}>{section.label}</h2>
+                <h2 className={styles.dayLabel}>{section.label}</h2>
                 {section.entries.length === 0 ? (
-                  <p className={`${styles.emptyLine} font-pixel-body`}>
+                  <p className={styles.emptyLine}>
                     {section.key === 'today' ? 'Nothing captured yet today.' : 'Nothing scheduled yet'}
                   </p>
                 ) : (
@@ -92,10 +91,10 @@ function BoardRow({ entry, now }: { entry: TimelineEntry; now: number }) {
         {ICONS[entry.type]}
       </span>
       <span className={styles.rowText}>
-        <span className={`${styles.rowTitle} font-pixel`}>{entry.title}</span>
-        {entry.subtitle && <span className={`${styles.rowSub} font-pixel-body`}>{entry.subtitle}</span>}
+        <span className={styles.rowTitle}>{entry.title}</span>
+        {entry.subtitle && <span className={styles.rowSub}>{entry.subtitle}</span>}
       </span>
-      <span className={`${styles.rowTime} font-pixel-body`}>{relativeTime(entry.timestamp, now)}</span>
+      <span className={styles.rowTime}>{relativeTime(entry.timestamp, now)}</span>
     </>
   );
 

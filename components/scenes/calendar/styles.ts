@@ -9,6 +9,7 @@ const styles = {
   boardCenter: 'cal-boardCenter',
   boardHeader: 'cal-boardHeader',
   boardScroll: 'cal-boardScroll',
+  btn: 'cal-btn',
   dayLabel: 'cal-dayLabel',
   daySection: 'cal-daySection',
   emptyLine: 'cal-emptyLine',
@@ -16,6 +17,7 @@ const styles = {
   eventName: 'cal-eventName',
   fab: 'cal-fab',
   foreground: 'cal-foreground',
+  glare: 'cal-glare',
   hall: 'cal-hall',
   hallCanvas: 'cal-hallCanvas',
   intentChip: 'cal-intentChip',
@@ -28,8 +30,10 @@ const styles = {
   rowTime: 'cal-rowTime',
   rowTitle: 'cal-rowTitle',
   screen: 'cal-screen',
+  sheet: 'cal-sheet',
+  sheetCard: 'cal-sheetCard',
+  spinner: 'cal-spinner',
   stage: 'cal-stage',
-  truss: 'cal-truss',
   youTag: 'cal-youTag',
 } as const;
 

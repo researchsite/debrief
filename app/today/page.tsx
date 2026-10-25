@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Sheet,
@@ -36,6 +36,7 @@ export default function TodayPage() {
   const [event, setEvent] = useState<{ eventName: string; primaryIntent: string } | null>(null);
   const [state, setState] = useState<BoardState>('loading');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const boardRef = useRef<HTMLDivElement>(null);
 
   const [attempt, setAttempt] = useState(0);
   const [loadedAt, setLoadedAt] = useState(0);
@@ -67,11 +68,10 @@ export default function TodayPage() {
 
   return (
     <div className={styles.stage}>
-      <HallBackdrop />
+      <HallBackdrop boardRef={boardRef} />
 
       <div className={styles.foreground}>
-        <div className={styles.truss} aria-hidden="true" />
-        <div className={styles.boardArea}>
+        <div ref={boardRef} className={styles.boardArea}>
           <Billboard state={state} event={event} sections={sections} now={loadedAt} onRetry={retry} />
         </div>
         <Attendee />
@@ -79,34 +79,34 @@ export default function TodayPage() {
 
       {/* Floating "+" capture button with Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetTrigger aria-label="Add capture" className={`px-btn ${styles.fab}`}>
+        <SheetTrigger aria-label="Add capture" className={styles.fab}>
           +
         </SheetTrigger>
-        <SheetContent side="bottom" className="rounded-none border-t-4 border-[var(--px-ink)] bg-[var(--px-cream)] pb-8">
+        <SheetContent side="bottom" className={`${styles.sheet} pb-8`}>
           <SheetHeader className="mb-4">
-            <SheetTitle className="font-pixel text-lg">Add capture</SheetTitle>
+            <SheetTitle className="text-lg font-semibold">Add capture</SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-4 px-4">
             <Link
               href="/add-person"
               onClick={() => setSheetOpen(false)}
-              className="px-panel flex items-center gap-4 px-4 py-3 text-left hover:bg-[var(--px-sun)]"
+              className={styles.sheetCard}
             >
               <span className="text-2xl" aria-hidden="true">👤</span>
               <div>
-                <p className="font-pixel text-sm">Add Person</p>
-                <p className="font-pixel-body text-lg leading-none">Scan QR or enter LinkedIn URL</p>
+                <p className="text-sm font-semibold">Add Person</p>
+                <p className="text-sm text-[#5b5577]">Scan QR or enter LinkedIn URL</p>
               </div>
             </Link>
             <Link
               href="/add-talk"
               onClick={() => setSheetOpen(false)}
-              className="px-panel flex items-center gap-4 px-4 py-3 text-left hover:bg-[var(--px-sun)]"
+              className={styles.sheetCard}
             >
               <span className="text-2xl" aria-hidden="true">🎤</span>
               <div>
-                <p className="font-pixel text-sm">Add Talk</p>
-                <p className="font-pixel-body text-lg leading-none">Notes + ideas from a session</p>
+                <p className="text-sm font-semibold">Add Talk</p>
+                <p className="text-sm text-[#5b5577]">Notes + ideas from a session</p>
               </div>
             </Link>
           </div>

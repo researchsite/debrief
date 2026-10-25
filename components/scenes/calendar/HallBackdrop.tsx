@@ -1,20 +1,21 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { paintAtrium } from './atrium';
+import { useEffect, useRef, type RefObject } from 'react';
+import { paintAtrium, type BoardRect } from './atrium';
 import styles from './styles';
 
 /** Breakpoint (CSS px) between the portrait phone layout and the wide layout; mirrors calendar.css. */
 const WIDE_MIN = 768;
-/** Approximate half-width (CSS px) of the end-of-hall sign plus a margin. */
-const SIGN_CLEARANCE = 112;
+const FALLBACK_FONT = 'ui-sans-serif, system-ui, sans-serif';
 
 /**
- * Static convention-center atrium behind the schedule board. Painted once per
- * size onto a low-resolution canvas and scaled up with crisp pixels; the
- * picture is deterministic, so nothing here differs between server and client.
+ * Static convention-center atrium behind the schedule board, painted once per
+ * size at full device resolution. The truss, cables and the clearing on the
+ * floor are fitted to the board's measured rectangle. The picture is
+ * deterministic and painted only on the client, so nothing differs between
+ * server and client renders.
  */
-export function HallBackdrop() {
+export function HallBackdrop({ boardRef }: { boardRef: RefObject<HTMLElement | null> }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -23,34 +24,53 @@ export function HallBackdrop() {
     const canvas = canvasRef.current;
     if (!host || !canvas) return;
     let painted = '';
+    let cancelled = false;
 
-    const paint = () => {
+    const paint = (force = false) => {
       const { clientWidth: cw, clientHeight: ch } = host;
       if (cw === 0 || ch === 0) return;
-      const wide = cw >= WIDE_MIN;
-      const scale = wide ? 4 : 3;
-      const w = Math.ceil(cw / scale);
-      const h = Math.ceil(ch / scale);
-      const key = `${w}x${h}`;
-      if (key === painted) return;
+      const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+      const hostBox = host.getBoundingClientRect();
+      const el = boardRef.current;
+      let board: BoardRect | null = null;
+      if (el) {
+        const b = el.getBoundingClientRect();
+        board = {
+          left: b.left - hostBox.left,
+          top: b.top - hostBox.top,
+          right: b.right - hostBox.left,
+          bottom: b.bottom - hostBox.top,
+        };
+      }
+      const key = `${cw}x${ch}@${dpr}|${board ? Object.values(board).map(Math.round).join(',') : '-'}`;
+      if (key === painted && !force) return;
       painted = key;
-      canvas.width = w;
-      canvas.height = h;
-      canvas.style.width = `${w * scale}px`;
-      canvas.style.height = `${h * scale}px`;
+      canvas.width = Math.round(cw * dpr);
+      canvas.height = Math.round(ch * dpr);
+      canvas.style.width = `${cw}px`;
+      canvas.style.height = `${ch}px`;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-      // Wide: the board hangs left of centre, so the vanishing point (and the
-      // DEVCONF sign drawn there) moves right far enough to clear the truss.
-      const vpX = Math.min(0.74, Math.max(0.64, 0.575 + SIGN_CLEARANCE / cw));
-      paintAtrium(ctx, w, h, wide ? { vpX, vpY: 0.17, spread: 0.47 } : { vpY: 0.7, spread: 0.55 });
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      const font = getComputedStyle(host).getPropertyValue('--font-geist-sans').trim() || FALLBACK_FONT;
+      paintAtrium(ctx, cw, ch, { wide: cw >= WIDE_MIN, board, font: `${font}, ${FALLBACK_FONT}` });
     };
 
     paint();
-    const ro = new ResizeObserver(paint);
+    // Repaint once the web font is ready so the painted signage uses it.
+    document.fonts?.ready.then(() => {
+      if (!cancelled) paint(true);
+    });
+    const ro = new ResizeObserver(() => paint());
     ro.observe(host);
-    return () => ro.disconnect();
-  }, []);
+    if (boardRef.current) ro.observe(boardRef.current);
+    return () => {
+      cancelled = true;
+      ro.disconnect();
+    };
+  }, [boardRef]);
 
   return (
     <div ref={hostRef} aria-hidden className={styles.hall}>
