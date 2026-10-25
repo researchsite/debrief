@@ -93,7 +93,7 @@ Go to http://localhost:3001/setup and:
 | `OPENAI_API_KEY` | OpenAI API key | — |
 | `BRIGHTDATA_API_KEY` | Bright Data API key | — |
 | `BRIGHTDATA_SERP_ZONE` | Bright Data SERP zone name | `serp_api1` |
-| `BRIGHTDATA_UNLOCKER_ZONE` | Bright Data Web Unlocker zone name | `web_unlocker1` |
+| `BRIGHTDATA_UNLOCKER_ZONE` | Bright Data Web Unlocker zone name | `mcp_unlocker` |
 | `BRIGHTDATA_MOCK` | Return fixture data instead of calling Bright Data | `true` |
 | `FALKORDB_HOST` | FalkorDB host | `localhost` |
 | `FALKORDB_PORT` | FalkorDB port | `6379` |
