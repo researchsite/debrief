@@ -11,55 +11,6 @@ const spriteSize = (rows: string[], unit = h): CSSProperties => ({ width: unit(r
 
 const SKIN = { O: PX.ink, s: PX.skin, d: PX.skinShade, n: '#ffe3cc', c: PX.blue, k: '#2557b8', w: PX.white };
 
-/* Right hand from behind: thumb on the back's thumb rest (cols 0-6 sit on the body), fingers wrapping the grip edge. */
-const RIGHT_HAND = [
-  '.OOOO.........',
-  'OnnssO........',
-  'OnnssO........',
-  'OsssdO........',
-  'OsssdO........',
-  'OsssdO........',
-  'OsssdOOOOOO...',
-  'OssssdssssdO..',
-  'OsssssssssssO.',
-  'OsssssssssddO.',
-  'OssssssOOOOOO.',
-  'OsssssssssssO.',
-  'OssssssssssssO',
-  'OsssssssssssdO',
-  'OssssssOOOOOOO',
-  '.OsssssssssssO',
-  '.OssssssssssdO',
-  '.OsssssssssddO',
-  '..OsssssOOOOO.',
-  '..OssssssssdO.',
-  '..OsssssssddO.',
-  '...OssssssdO..',
-  '...OOsssddO...',
-  '...OssssddO...',
-  '...OOOOOOOOO..',
-  '...OwwwwwwwO..',
-  '...OOOOOOOOO..',
-  '...OcccccckO..',
-  '...OcccccckO..',
-];
-
-/* Right index finger lying across the top plate, tip resting on the shutter button. */
-const INDEX_FINGER = [
-  'OOOOOOOOOO....',
-  'OnnsssssssOO..',
-  'OnnsssssssssO.',
-  'OsdddddsssssO.',
-  '.OOOOOOOdsssdO',
-  '.......OsssddO',
-  '.......OsssdO.',
-  '.......OsssdO.',
-  '......OssssdO.',
-  '......OssssdO.',
-  '......OssssdO.',
-  '......OssssdO.',
-];
-
 /* Left hand cradling the body from below; fingertips curl up the left side (body edge between cols 4 and 5, bottom at row 6). */
 const LEFT_HAND = [
   '.OOO..................',
@@ -81,6 +32,9 @@ const LEFT_HAND = [
   '......OcccccckO.......',
   '......OcccccckO.......',
 ];
+
+/* The same hand mirrored, cradling the lens barrel from below with fingertips curling up its far end. */
+const LENS_HAND = LEFT_HAND.map((row) => row.split('').reverse().join(''));
 
 /** Diagonal neck strap leaving a lug toward the top-right; mirrored for the left lug. */
 const STRAP_RIGHT = Array.from({ length: 14 }, (_, y) => {
@@ -113,6 +67,74 @@ function Part({ style, children }: { style: CSSProperties; children?: ReactNode 
 
 const RIDGES = `repeating-linear-gradient(90deg, #8c8aa3 0 3px, #55526b 3px 6px)`;
 
+/** Stepped-octagon clip; on a narrow box it reads as a pixel ellipse. */
+const OVAL = 'polygon(30% 0, 70% 0, 70% 6%, 85% 6%, 85% 15%, 94% 15%, 94% 30%, 100% 30%, 100% 70%, 94% 70%, 94% 85%, 85% 85%, 85% 94%, 70% 94%, 70% 100%, 30% 100%, 30% 94%, 15% 94%, 15% 85%, 6% 85%, 6% 70%, 0 70%, 0 30%, 6% 30%, 6% 15%, 15% 15%, 15% 6%, 30% 6%)';
+/** Hard-stop light and shadow bands that make a flat strip read as a cylinder. */
+const CYLINDER = 'linear-gradient(180deg, rgba(0,0,0,0.4) 0 8%, transparent 8% 16%, rgba(255,255,255,0.22) 16% 26%, transparent 26% 64%, rgba(0,0,0,0.2) 64% 80%, rgba(0,0,0,0.42) 80% 100%)';
+
+/**
+ * One ring of the lens barrel. Rings have their own diameters (`size`, % of the barrel height), so the
+ * silhouette steps like a real zoom lens; they shrink slightly toward the front because it is farther away.
+ */
+function Ring({ grow, size, background, className = '', children }: { grow: number; size: number; background: string; className?: string; children?: ReactNode }) {
+  return (
+    <div
+      className={`relative -ml-[3px] flex min-w-0 items-center justify-center first:ml-0 ${className}`}
+      style={{ flex: `${grow} 1 0`, height: `${size}%`, background, border: `3px solid ${PX.ink}` }}
+    >
+      <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: CYLINDER }} />
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Zoom lens seen in profile, sticking out of the camera's right side: mount, red ring with index mark,
+ * printed focal-length scale, ridged zoom ring, focus ring and front glass.
+ */
+function LensBarrel() {
+  return (
+    <div aria-hidden className="imp-lens pointer-events-none absolute">
+      <div className="absolute inset-0 flex items-center">
+        <Ring grow={1} size={76} background="repeating-linear-gradient(180deg, #c9c7d9 0 4px, #8c8aa3 4px 7px)" />
+        <Ring grow={1.2} size={92} background="#1f1b2e">
+          <span className="absolute inset-y-0 left-[30%] w-[3px]" style={{ background: PX.red }} />
+          <span className="absolute left-[62%] top-1/2 h-[6px] w-[6px] -translate-y-1/2" style={{ background: PX.white }} />
+        </Ring>
+        <Ring grow={2} size={92} background="#2a2639">
+          <span className="imp-lens-scale font-pixel-body relative flex flex-col items-center leading-none" style={{ color: '#d8d6e6' }}>
+            <span>24</span>
+            <span>35</span>
+            <span style={{ color: PX.sun }}>50</span>
+            <span>70</span>
+          </span>
+        </Ring>
+        <Ring grow={4.2} size={100} background="repeating-linear-gradient(90deg, #5d5780 0 var(--imp-ridge), #141020 var(--imp-ridge) calc(var(--imp-ridge) * 2))" />
+        <Ring grow={0.8} size={88} background="#2a2639" className="max-sm:hidden" />
+        <Ring grow={2.2} size={90} background="repeating-linear-gradient(90deg, #4a4562 0 3px, #1a1626 3px 6px)" className="max-sm:hidden" />
+        <Ring grow={1.3} size={95} background="#141020">
+          <span className="absolute inset-y-0 right-0 w-[30%]" style={{ background: '#9f9cb4' }} />
+        </Ring>
+      </div>
+      {/* Front glass: a narrow pixel ellipse (we see it nearly edge-on) with coated rings and a glint. */}
+      <div className="absolute" style={{ right: 'calc(var(--u) * -3)', top: '3%', bottom: '3%', width: 'calc(var(--u) * 6)', clipPath: OVAL, background: PX.ink }}>
+        <div className="absolute" style={{ inset: 3, clipPath: OVAL, background: '#3a3550' }}>
+          <div className="absolute" style={{ inset: '6% 18%', clipPath: OVAL, background: '#141020' }}>
+            <div className="absolute" style={{ inset: '8% 14%', clipPath: OVAL, background: 'linear-gradient(180deg, #5b4fd6 0 22%, #262a78 22% 62%, #2f7d6c 62% 74%, #1a1748 74% 100%)' }} />
+            <div className="absolute" style={{ left: '30%', top: '16%', width: '28%', height: '12%', background: PX.white }} />
+            <div className="absolute" style={{ left: '30%', top: '32%', width: '28%', height: '5%', background: PX.white, opacity: 0.7 }} />
+          </div>
+        </div>
+      </div>
+      {/* Right hand cradling the barrel from below */}
+      <div className="absolute z-10" style={{ right: h(0.5), top: `calc(100% - ${h(6.5)})` }}>
+        <PixelSprite rows={LENS_HAND} palette={SKIN} style={spriteSize(LENS_HAND)} />
+        <div style={{ marginLeft: h(7), width: h(9), height: '100vh', background: PX.blue, borderLeft: `${h(1)} solid ${PX.ink}`, borderRight: `${h(1)} solid ${PX.ink}`, boxShadow: `inset ${h(-1)} 0 0 #2557b8` }} />
+      </div>
+    </div>
+  );
+}
+
 interface CameraFrameProps {
   /** Content shown on the LCD screen. */
   children: ReactNode;
@@ -127,7 +149,8 @@ interface CameraFrameProps {
 }
 
 /**
- * Photographer POV: a chunky pixel camera seen from the back, held in two hands.
+ * Photographer POV: a chunky pixel camera seen from the back and slightly to its right, so its side and
+ * zoom lens show in profile. One hand cradles the body, the other the lens.
  * The back is split into an LCD screen (2/3) hosting page content and a control panel (1/3).
  */
 export function CameraFrame({ children, controls, flashKey = 0, dragOver = false, onDragOver, onDragLeave, onDrop }: CameraFrameProps) {
@@ -139,10 +162,13 @@ export function CameraFrame({ children, controls, flashKey = 0, dragOver = false
       <ConferenceBackdrop />
 
       {/* Body box: everything else is positioned relative to it. */}
-      <div
-        className="absolute"
-        style={{ top: u(9), bottom: h(13), left: `max(calc(${h(5)} + 10px), calc((100% - 1000px) / 2))`, right: `max(calc(${h(7)} + 10px), calc((100% - 1000px) / 2))` }}
-      >
+      <div className="imp-body absolute">
+        {/* Right side face, seen because the viewpoint sits a little to the camera's right */}
+        <div aria-hidden className="imp-side absolute" style={{ background: PX.ink }}>
+          <div className="absolute" style={{ inset: '3px 3px 3px 0', clipPath: 'inherit', background: 'linear-gradient(90deg, var(--imp-body-lo) 0 45%, #17131f 45% 100%)' }} />
+        </div>
+        <LensBarrel />
+
         {/* Neck strap */}
         <PixelSprite rows={STRAP_LEFT} palette={STRAP_PALETTE} className="pointer-events-none absolute" style={{ ...spriteSize(STRAP_LEFT, u), left: u(-14), top: u(-8) }} />
         <PixelSprite rows={STRAP_RIGHT} palette={STRAP_PALETTE} className="pointer-events-none absolute hidden sm:block" style={{ ...spriteSize(STRAP_RIGHT, u), right: u(-14), top: u(-8) }} />
@@ -157,9 +183,9 @@ export function CameraFrame({ children, controls, flashKey = 0, dragOver = false
           <div className="absolute inset-[3px] bottom-0" style={{ background: 'var(--imp-body)', clipPath: 'polygon(14% 0, 86% 0, 86% 30%, 100% 30%, 100% 100%, 0 100%, 0 30%, 14% 30%)', boxShadow: 'inset 0 3px 0 var(--imp-body-hi)' }} />
         </div>
         <Part style={{ left: '50%', transform: 'translateX(-50%)', bottom: `calc(100% + ${u(6)} - 6px)`, width: u(12), height: u(1.5), background: PX.stone }} />
-        <Part style={{ right: `calc(${h(9)} + ${u(2)})`, bottom: 'calc(100% - 3px)', width: u(8), height: u(2), background: RIDGES }} />
-        <Part style={{ right: h(4), bottom: 'calc(100% - 3px)', width: h(5), height: h(1.5) }} />
-        <Part style={{ right: h(4.75), bottom: `calc(100% + ${h(1.5)} - 6px)`, width: h(3.5), height: h(1), background: PX.red }} />
+        <Part style={{ right: u(14), bottom: 'calc(100% - 3px)', width: u(8), height: u(2), background: RIDGES }} />
+        <Part style={{ right: u(4), bottom: 'calc(100% - 3px)', width: u(7), height: u(2) }} />
+        <Part style={{ right: u(5), bottom: `calc(100% + ${u(2)} - 6px)`, width: u(5), height: u(1.5), background: PX.red }} />
 
         {/* Camera body */}
         <div className="absolute inset-0" style={{ background: PX.ink, clipPath: stepped(u(1)) }}>
@@ -170,11 +196,11 @@ export function CameraFrame({ children, controls, flashKey = 0, dragOver = false
               clipPath: stepped(u(1)),
               background: 'var(--imp-body)',
               boxShadow: `inset ${u(1)} ${u(1)} 0 var(--imp-body-hi), inset ${u(-1)} ${u(-1)} 0 var(--imp-body-lo)`,
-              padding: `${u(5)} calc(${h(7)} + 2px) ${u(4)} ${u(3)}`,
+              padding: `${u(5)} ${u(5.5)} ${u(4)} ${u(3)}`,
             }}
           >
             {/* Rubber thumb rest along the right edge */}
-            <div aria-hidden className="absolute" style={{ right: h(0.5), top: u(2), bottom: u(2), width: h(6), backgroundColor: '#24202f', backgroundImage: 'radial-gradient(#3a3550 1px, transparent 1.5px)', backgroundSize: '6px 6px', border: `2px solid ${PX.ink}` }} />
+            <div aria-hidden className="absolute" style={{ right: u(1), top: u(2), bottom: u(2), width: u(3), backgroundColor: '#24202f', backgroundImage: 'radial-gradient(#3a3550 1px, transparent 1.5px)', backgroundSize: '6px 6px', border: `2px solid ${PX.ink}` }} />
             {/* Eyepiece */}
             <div aria-hidden className="absolute left-1/2 -translate-x-1/2" style={{ top: 0, width: u(14), height: u(4.5), background: '#141020', border: `3px solid ${PX.ink}`, borderTop: 0 }}>
               <div className="mx-auto" style={{ marginTop: u(0.8), width: u(7), height: u(2), background: '#2d3a6a', boxShadow: `inset ${u(1)} 0 0 #4a5a9a` }} />
@@ -206,7 +232,7 @@ export function CameraFrame({ children, controls, flashKey = 0, dragOver = false
                     <span aria-hidden className="imp-rec inline-block h-2.5 w-2.5" style={{ background: PX.red }} />
                     <span style={{ color: PX.red }}>REC</span>
                   </span>
-                  <span className="tracking-wider" style={{ color: PX.sun }}>ISO 400 · F2.8 · 1/60</span>
+                  <span className="tracking-wider" style={{ color: PX.sun }}><span className="max-sm:hidden">ISO 400 · </span>F2.8 · 1/60</span>
                   <span aria-hidden className="inline-flex h-3 w-7 items-stretch gap-[2px] border-2 p-[1px]" style={{ borderColor: PX.white }}>
                     <span className="flex-1" style={{ background: PX.grass }} />
                     <span className="flex-1" style={{ background: PX.grass }} />
@@ -224,12 +250,7 @@ export function CameraFrame({ children, controls, flashKey = 0, dragOver = false
           </div>
         </div>
 
-        {/* Hands */}
-        <PixelSprite rows={INDEX_FINGER} palette={SKIN} className="pointer-events-none absolute z-10" style={{ ...spriteSize(INDEX_FINGER), right: h(-7), top: h(-6.5) }} />
-        <div className="pointer-events-none absolute z-20" style={{ right: h(-7), top: h(1) }}>
-          <PixelSprite rows={RIGHT_HAND} palette={SKIN} style={spriteSize(RIGHT_HAND)} />
-          <div style={{ marginLeft: h(3), width: h(9), height: '100vh', background: PX.blue, borderLeft: `${h(1)} solid ${PX.ink}`, borderRight: `${h(1)} solid ${PX.ink}`, boxShadow: `inset ${h(-1)} 0 0 #2557b8` }} />
-        </div>
+        {/* Left hand cradling the body from below; the right hand holds the lens */}
         <div className="pointer-events-none absolute z-20" style={{ left: h(-5), top: `calc(100% - ${h(6)})` }}>
           <PixelSprite rows={LEFT_HAND} palette={SKIN} style={spriteSize(LEFT_HAND)} />
           <div style={{ marginLeft: h(6), width: h(9), height: '100vh', background: PX.blue, borderLeft: `${h(1)} solid ${PX.ink}`, borderRight: `${h(1)} solid ${PX.ink}`, boxShadow: `inset ${h(-1)} 0 0 #2557b8` }} />
