@@ -17,18 +17,30 @@ const ssl = process.env.FALKORDB_SSL === 'true';
 // (e.g. by seed scripts running in a separate process).
 let dbClient: FalkorDB | null = null;
 
+async function connect(): Promise<FalkorDB> {
+  const url = process.env.FALKORDB_URL;
+  const client = await FalkorDB.connect(
+    url
+      ? { url }
+      : {
+          socket: { host, port, tls: ssl },
+          ...(username && { username }),
+          ...(password && { password }),
+        },
+  );
+  // Clear the cached client if the underlying connection closes unexpectedly
+  // so the next query automatically reconnects.
+  const raw = (client as unknown as { connection?: { on?: (ev: string, cb: () => void) => void } }).connection;
+  if (raw?.on) {
+    raw.on('error', () => { dbClient = null; });
+    raw.on('end', () => { dbClient = null; });
+  }
+  return client;
+}
+
 async function getDb(): Promise<FalkorDB> {
   if (!dbClient) {
-    const url = process.env.FALKORDB_URL;
-    dbClient = await FalkorDB.connect(
-      url
-        ? { url }
-        : {
-            socket: { host, port, tls: ssl },
-            ...(username && { username }),
-            ...(password && { password }),
-          },
-    );
+    dbClient = await connect();
   }
   return dbClient;
 }
