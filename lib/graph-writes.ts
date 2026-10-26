@@ -645,10 +645,10 @@ export async function writeConversation(input: ConversationSaveInput, graphName?
     graphName,
   );
 
-  // 3. MET edge from Me to Person
+  // 3. MET edge from Me to Person — use epoch ms so the today filter works
   await query(
-    `MATCH (me:Me) MERGE (me)-[:MET {at: $starts}]->(p:Person {linkedin_url: $personUrl})`,
-    { starts, personUrl },
+    `MATCH (me:Me) MERGE (me)-[:MET {at: $timestamp}]->(p:Person {linkedin_url: $personUrl})`,
+    { timestamp, personUrl },
     graphName,
   );
 
@@ -1002,12 +1002,15 @@ export async function getRecapPeopleForIntent(
   let result;
 
   if (intent === 'job_hunt') {
+    // Return all people MET; optionally surface hiring-company link if it exists
     result = await roQuery(
-      `MATCH (me:Me)-[:WANTS]->(r:Role)<-[:HIRING]-(c:Company)<-[:WORKS_AT]-(p:Person)<-[:MET]-(me)
+      `MATCH (me:Me)-[:MET]->(p:Person)
+       OPTIONAL MATCH (me)-[:WANTS]->(r:Role)<-[:HIRING]-(hc:Company)<-[:WORKS_AT]-(p)
+       OPTIONAL MATCH (p)-[:WORKS_AT]->(wa:Company)
        OPTIONAL MATCH (p)-[:HAS_NOTE]->(n:Note)
        OPTIONAL MATCH (p)-[:HAS_CONTEXT]->(ctx:Context)
        RETURN p.name AS name, p.headline AS headline, coalesce(p.linkedin_url, p.id) AS linkedinUrl,
-              c.name AS company, n.text AS noteText, ctx.bullets AS ctxBullets,
+              coalesce(hc.name, wa.name) AS company, n.text AS noteText, ctx.bullets AS ctxBullets,
               ctx.fetched_at AS ctxFetched
        LIMIT 10`,
       {},
@@ -1028,8 +1031,10 @@ export async function getRecapPeopleForIntent(
       graphName,
     );
   } else {
+    // networking / hiring / default — include everyone MET regardless of company
     result = await roQuery(
-      `MATCH (me:Me)-[:MET]->(p:Person)-[:WORKS_AT]->(c:Company)
+      `MATCH (me:Me)-[:MET]->(p:Person)
+       OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
        OPTIONAL MATCH (p)-[:HAS_NOTE]->(n:Note)
        OPTIONAL MATCH (p)-[:HAS_CONTEXT]->(ctx:Context)
        RETURN p.name AS name, p.headline AS headline, coalesce(p.linkedin_url, p.id) AS linkedinUrl,

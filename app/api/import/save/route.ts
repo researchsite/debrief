@@ -48,15 +48,19 @@ export async function POST(request: NextRequest) {
           extractedText: result.title,
         });
 
-        // Write Session node
+        // Write Session node and link Me to it
         if (result.title) {
           await query(
             `MERGE (s:Session {title: $title}) SET s.speaker = $speaker`,
             { title: result.title, speaker: result.speaker ?? '' },
           );
+          await query(
+            `MATCH (me:Me) MATCH (s:Session {title: $title}) MERGE (me)-[:SAW]->(s)`,
+            { title: result.title },
+          );
         }
 
-        // Write Idea nodes
+        // Write Idea nodes with SPARKED edge (not HAS_IDEA)
         for (const idea of result.ideas ?? []) {
           await query(
             `MERGE (i:Idea {text: $text})`,
@@ -64,13 +68,13 @@ export async function POST(request: NextRequest) {
           );
           if (result.title) {
             await query(
-              `MATCH (s:Session {title: $title}) MATCH (i:Idea {text: $text}) MERGE (s)-[:HAS_IDEA]->(i)`,
+              `MATCH (s:Session {title: $title}) MATCH (i:Idea {text: $text}) MERGE (s)-[:SPARKED]->(i)`,
               { title: result.title, text: idea },
             );
           }
         }
 
-        // Write Topic nodes
+        // Write Topic nodes with ABOUT edge (not COVERS), and link each idea to each topic
         for (const topic of result.topics ?? []) {
           const normalized = topic.toLowerCase();
           await query(
@@ -79,8 +83,14 @@ export async function POST(request: NextRequest) {
           );
           if (result.title) {
             await query(
-              `MATCH (s:Session {title: $title}) MATCH (t:Topic {name: $name}) MERGE (s)-[:COVERS]->(t)`,
+              `MATCH (s:Session {title: $title}) MATCH (t:Topic {name: $name}) MERGE (s)-[:ABOUT]->(t)`,
               { title: result.title, name: normalized },
+            );
+          }
+          for (const idea of result.ideas ?? []) {
+            await query(
+              `MATCH (i:Idea {text: $idea}) MATCH (t:Topic {name: $name}) MERGE (i)-[:ABOUT]->(t)`,
+              { idea, name: normalized },
             );
           }
         }

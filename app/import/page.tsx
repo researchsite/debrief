@@ -66,6 +66,7 @@ export default function ImportPage() {
   const qrQueue = useRef<{ id: string; payload: string }[]>([]);
   const qrRequests = useRef(new Map<string, AbortController>());
   const alive = useRef(true);
+  const pendingPickRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     alive.current = true;
     const requests = qrRequests.current;
@@ -103,9 +104,19 @@ export default function ImportPage() {
     drainQrQueue();
   }
   function clearImports() {
-    qrQueue.current = []; qrRequests.current.forEach((controller) => controller.abort());
+    qrQueue.current = [];
+    qrRequests.current.forEach((controller) => controller.abort());
+    qrRequests.current.clear();
     setPageState('upload'); setFiles([]); setFileResults([]); setTranscripts([]);
   }
+
+  useEffect(() => {
+    if (pageState === 'upload' && pendingPickRef.current) {
+      const input = pendingPickRef.current;
+      pendingPickRef.current = null;
+      input.click();
+    }
+  }, [pageState]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -218,8 +229,12 @@ export default function ImportPage() {
     void handleImport();
   };
   const pick = (input: HTMLInputElement | null) => {
-    if (pageState === 'review') clearImports();
-    input?.click();
+    if (pageState === 'review') {
+      pendingPickRef.current = input;
+      clearImports();
+    } else {
+      input?.click();
+    }
   };
   const busy = pageState === 'classifying';
 
@@ -561,10 +576,27 @@ function ReviewCard({ fr, onSave, onDismiss, onToggleEdit, onUpdateField }: Revi
 
     default: {
       const other = result as { kind: string; text?: string };
+      const qrText = other.text ?? '';
+      const upgradeToCoupon = () => {
+        onUpdateField('code', qrText);
+        onUpdateField('vendor', '');
+        onUpdateField('value', '');
+        onUpdateField('description', '');
+        onUpdateField('expires', null);
+        onUpdateField('terms', '');
+        onUpdateField('redeem_url', '');
+        onUpdateField('kind', 'coupon');
+      };
       return (
         <PxCard title={`📄 ${other.kind === 'qr' ? 'QR Code' : 'Other'}`} accent="var(--px-cream)">
-          {isEditing && fr.qr ? <Textarea aria-label="QR details" value={other.text ?? ''} onChange={(event) => onUpdateField('text', event.target.value)} className={FIELD} /> : other.text && <p className={`font-pixel-body whitespace-pre-wrap break-all text-lg ${MUTED}`}>{other.text}</p>}
-          {fr.qr && <><PxButton variant="ghost" onClick={onToggleEdit}>{isEditing ? 'Done' : 'Edit'}</PxButton><PxButton onClick={onSave}>Save QR details</PxButton></>}
+          {isEditing && fr.qr ? <Textarea aria-label="QR details" value={qrText} onChange={(event) => onUpdateField('text', event.target.value)} className={FIELD} /> : qrText && <p className={`font-pixel-body whitespace-pre-wrap break-all text-lg ${MUTED}`}>{qrText}</p>}
+          {fr.qr && (
+            <>
+              <PxButton variant="ghost" onClick={onToggleEdit}>{isEditing ? 'Done' : 'Edit'}</PxButton>
+              <PxButton onClick={onSave}>Save QR details</PxButton>
+              {qrText && <PxButton variant="secondary" onClick={upgradeToCoupon}>Save as Coupon →</PxButton>}
+            </>
+          )}
           <PxButton variant="secondary" className="w-full" onClick={onDismiss}>Dismiss</PxButton>
         </PxCard>
       );

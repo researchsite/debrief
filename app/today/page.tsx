@@ -64,7 +64,17 @@ export default function TodayPage() {
     setAttempt((n) => n + 1);
   }, []);
 
-  const sections = useMemo(() => groupByDay(timeline, loadedAt), [timeline, loadedAt]);
+  const captures = useMemo(() => timeline.filter((e) => e.type !== 'session'), [timeline]);
+  const schedule = useMemo(() => timeline.filter((e) => e.type === 'session'), [timeline]);
+
+  const scheduleSections = useMemo(
+    () => (schedule.length > 0 ? [{ key: 'schedule', label: "Today's Schedule", entries: schedule }] : []),
+    [schedule],
+  );
+  const sections = useMemo(
+    () => [...scheduleSections, ...groupByDay(captures, loadedAt)],
+    [scheduleSections, captures, loadedAt],
+  );
 
   return (
     <div className={styles.stage}>

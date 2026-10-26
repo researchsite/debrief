@@ -66,7 +66,7 @@ export function Billboard({ state, event, sections, now, onRetry }: BillboardPro
                 <h2 className={styles.dayLabel}>{section.label}</h2>
                 {section.entries.length === 0 ? (
                   <p className={styles.emptyLine}>
-                    {section.key === 'today' ? 'Nothing captured yet today.' : 'Nothing scheduled yet'}
+                    {section.key === 'today' ? 'Nothing captured yet today.' : section.key === 'schedule' ? 'No sessions scheduled.' : 'Nothing scheduled yet'}
                   </p>
                 ) : (
                   <ul className={styles.rows}>
