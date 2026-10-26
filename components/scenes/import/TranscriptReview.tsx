@@ -193,8 +193,8 @@ export function TranscriptReview({ filename, items, onDismiss }: { filename: str
                     value={choice?.personUrl ?? ''}
                     onChange={(e) => selectPerson(item, e.target.value, itemIndex)}
                   >
-                    {item.candidates.map((c) => (
-                      <option key={c.linkedinUrl} value={c.linkedinUrl}>{c.name} — {c.headline || c.linkedinUrl}</option>
+                    {item.candidates.map((c, ci) => (
+                      <option key={`${ci}-${c.linkedinUrl}`} value={c.linkedinUrl}>{c.name} — {c.headline || c.linkedinUrl}</option>
                     ))}
                     <option value="__new__">+ New person</option>
                   </select>
