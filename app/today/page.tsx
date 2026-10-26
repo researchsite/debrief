@@ -40,6 +40,7 @@ export default function TodayPage() {
 
   const [attempt, setAttempt] = useState(0);
   const [loadedAt, setLoadedAt] = useState(0);
+  const [attended, setAttended] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +65,15 @@ export default function TodayPage() {
     setAttempt((n) => n + 1);
   }, []);
 
+  const markAttended = useCallback(async (title: string) => {
+    setAttended((prev) => new Set([...prev, title]));
+    await fetch('/api/sessions/attend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+  }, []);
+
   const captures = useMemo(() => timeline.filter((e) => e.type !== 'session'), [timeline]);
   const schedule = useMemo(() => timeline.filter((e) => e.type === 'session'), [timeline]);
 
@@ -82,7 +92,7 @@ export default function TodayPage() {
 
       <div className={styles.foreground}>
         <div ref={boardRef} className={styles.boardArea}>
-          <Billboard state={state} event={event} sections={sections} now={loadedAt} onRetry={retry} />
+          <Billboard state={state} event={event} sections={sections} now={loadedAt} onRetry={retry} attended={attended} onMarkAttended={markAttended} />
         </div>
         <Attendee />
       </div>

@@ -1,0 +1,25 @@
+{
+  "event": {
+    "eventName": "Patch the Conference Hackathon",
+    "primaryIntent": "networking"
+  },
+  "timeline": [
+    { "type": "session", "timestamp": 1761490800000, "title": "Doors open", "subtitle": "9:00 AM · Patch the Conference Hackathon" },
+    { "type": "session", "timestamp": 1761492600000, "title": "Grab breakfast, get set up, start hacking", "subtitle": "9:30 AM · Hacking begins" },
+    { "type": "person",  "timestamp": 1761494400000, "title": "Met Kasey Johnson", "subtitle": "Marketing & Events · Bright Data", "url": "https://www.linkedin.com/in/kasey-johnson-08655b39/" },
+    { "type": "person",  "timestamp": 1761496200000, "title": "Met Lizz Zhang", "subtitle": "Developer Relations · FalkorDB", "url": "https://www.linkedin.com/in/lizz-zhang/" },
+    { "type": "person",  "timestamp": 1761498000000, "title": "Met Neil Ricci", "subtitle": "Solutions Engineer · Bright Data", "url": "https://www.linkedin.com/in/neil-ricci/" },
+    { "type": "session", "timestamp": 1761499800000, "title": "Workshops and talks from our sponsors", "subtitle": "12:30 PM · FalkorDB · Bright Data · Qodo" },
+    { "type": "person",  "timestamp": 1761501600000, "title": "Met Kunal Kushwaha", "subtitle": "Developer Advocate · Qodo", "url": "https://www.linkedin.com/in/kunal-kushwaha/" },
+    { "type": "person",  "timestamp": 1761503400000, "title": "Met Joshua Levy", "subtitle": "Multi-Agent Architecture", "url": "https://www.linkedin.com/in/jlevy" },
+    { "type": "person",  "timestamp": 1761505200000, "title": "Met Sidra Miconi", "subtitle": "Founder · AgentGlass", "url": "https://www.linkedin.com/in/sidramiconi" },
+    { "type": "person",  "timestamp": 1761507000000, "title": "Met Mannan Shukla", "subtitle": "Founder · Spawnpoint", "url": "https://www.linkedin.com/in/mannanshukla" },
+    { "type": "person",  "timestamp": 1761508800000, "title": "Met Claudio Olmedo", "subtitle": "Founder · One Dollar Computer", "url": "https://www.linkedin.com/in/claudioolmedo-com" },
+    { "type": "session", "timestamp": 1761510600000, "title": "Pizzas arrive, lunch is served", "subtitle": "3:30 PM" },
+    { "type": "person",  "timestamp": 1761512400000, "title": "Met Nancy Li", "subtitle": "Community Organizer", "url": "https://www.linkedin.com/in/nancyli1/" },
+    { "type": "person",  "timestamp": 1761514200000, "title": "Met Aarsh Sheth", "subtitle": "Backend & Distributed Systems", "url": "https://www.linkedin.com/in/aarsheth/" },
+    { "type": "session", "timestamp": 1761516000000, "title": "Keep hacking and submit your project", "subtitle": "5:00 PM · Final stretch" },
+    { "type": "session", "timestamp": 1761519600000, "title": "Presentations and judging", "subtitle": "6:00 PM · Teams showcase on stage" },
+    { "type": "session", "timestamp": 1761523200000, "title": "Winners announced and the iPhone Duos handed over", "subtitle": "7:00 PM" }
+  ]
+}

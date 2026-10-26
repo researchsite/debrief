@@ -1,22 +1,156 @@
 [
   {
-    "name": "Alex Rivera",
-    "headline": "Staff Engineer at Stripe",
-    "linkedin_url": "https://www.linkedin.com/in/alex-rivera-fake",
+    "name": "Kasey Johnson",
+    "headline": "Marketing & Events at Bright Data",
+    "linkedin_url": "https://www.linkedin.com/in/kasey-johnson-08655b39/",
     "city": "San Francisco, CA",
-    "current_company": "Stripe",
-    "past_companies": ["Plaid", "Square"],
-    "schools": ["UC Berkeley"],
-    "skills": ["Payments", "APIs", "Python", "Go"]
+    "current_company": "Bright Data",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Marketing", "Community Events", "AI Events", "Professional Networking"],
+    "photo_url": ""
   },
   {
-    "name": "Maya Patel",
-    "headline": "Product Manager at Notion",
-    "linkedin_url": "https://www.linkedin.com/in/maya-patel-fake",
+    "name": "Lizz Zhang",
+    "headline": "Developer Relations at FalkorDB",
+    "linkedin_url": "https://www.linkedin.com/in/lizz-zhang/",
     "city": "San Francisco, CA",
-    "current_company": "Notion",
-    "past_companies": ["Asana"],
-    "schools": ["Stanford University"],
-    "skills": ["Product Management", "AI", "Design Thinking"]
+    "current_company": "FalkorDB",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["FalkorDB", "Graph Databases", "Cloud Deployment", "Developer Experience", "SDK"],
+    "photo_url": ""
+  },
+  {
+    "name": "Nancy Li",
+    "headline": "Community Organizer & Tech Events",
+    "linkedin_url": "https://www.linkedin.com/in/nancyli1/",
+    "city": "San Francisco, CA",
+    "current_company": "",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Community Building", "Event Organizing", "Social Impact", "Tech Events"],
+    "photo_url": ""
+  },
+  {
+    "name": "Neil Ricci",
+    "headline": "Solutions Engineer at Bright Data",
+    "linkedin_url": "https://www.linkedin.com/in/neil-ricci/",
+    "city": "San Francisco, CA",
+    "current_company": "Bright Data",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Web Scraping", "Bright Data", "LinkedIn Data", "API Integration"],
+    "photo_url": ""
+  },
+  {
+    "name": "Kunal Kushwaha",
+    "headline": "Developer Advocate & Community Builder",
+    "linkedin_url": "https://www.linkedin.com/in/kunal-kushwaha/",
+    "city": "Amsterdam, Netherlands",
+    "current_company": "Qodo",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Developer Relations", "Community", "Open Source", "Qodo"],
+    "photo_url": ""
+  },
+  {
+    "name": "Shesha Sai Kumar Reddy Sadu",
+    "headline": "Geospatial & Data Engineering Specialist",
+    "linkedin_url": "https://www.linkedin.com/in/ssskr",
+    "city": "San Francisco, CA",
+    "current_company": "",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Geospatial", "Data Engineering", "AI", "GIS"],
+    "photo_url": ""
+  },
+  {
+    "name": "Madhu Koseke",
+    "headline": "Senior Data Engineer",
+    "linkedin_url": "https://www.linkedin.com/in/madhukoseke/",
+    "city": "San Francisco, CA",
+    "current_company": "",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Data Engineering", "Data Platforms", "AI", "Python"],
+    "photo_url": ""
+  },
+  {
+    "name": "Claudio Olmedo",
+    "headline": "Founder at One Dollar Computer | Robotics & STEM Education",
+    "linkedin_url": "https://www.linkedin.com/in/claudioolmedo-com",
+    "city": "San Francisco, CA",
+    "current_company": "One Dollar Computer",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Robotics", "STEM Education", "Hardware", "Embedded Systems", "Education Technology"],
+    "photo_url": ""
+  },
+  {
+    "name": "Mannan Shukla",
+    "headline": "Founder at Spawnpoint | Cloud-Native Engineering & AI Agents",
+    "linkedin_url": "https://www.linkedin.com/in/mannanshukla",
+    "city": "San Francisco, CA",
+    "current_company": "Spawnpoint",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Cloud-Native", "MCP", "AI Agents", "Deployment Automation", "Developer Tools"],
+    "photo_url": ""
+  },
+  {
+    "name": "Sidra Miconi",
+    "headline": "Founder at AgentGlass | AI Agent Reliability & Evaluation",
+    "linkedin_url": "https://www.linkedin.com/in/sidramiconi",
+    "city": "San Francisco, CA",
+    "current_company": "AgentGlass",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["AI Agents", "Agent Evaluation", "Agent Reliability", "Production AI", "Testing"],
+    "photo_url": ""
+  },
+  {
+    "name": "Aarsh Sheth",
+    "headline": "Backend & Distributed Systems Engineer",
+    "linkedin_url": "https://www.linkedin.com/in/aarsheth/",
+    "city": "San Francisco, CA",
+    "current_company": "",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Distributed Systems", "Backend Engineering", "Scalable Architecture", "Infrastructure"],
+    "photo_url": ""
+  },
+  {
+    "name": "Joshua Levy",
+    "headline": "Multi-Agent Architecture & AI Systems",
+    "linkedin_url": "https://www.linkedin.com/in/jlevy",
+    "city": "San Francisco, CA",
+    "current_company": "",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Multi-Agent Systems", "Agent-to-Agent Communication", "AI Architecture", "LLMs"],
+    "photo_url": ""
+  },
+  {
+    "name": "Madhughnea Adabala",
+    "headline": "UX & Backend Engineer",
+    "linkedin_url": "https://www.linkedin.com/in/madhughnea/",
+    "city": "San Francisco, CA",
+    "current_company": "",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["UX Design", "Backend Systems", "AI Products", "Product Workflow"],
+    "photo_url": ""
+  },
+  {
+    "name": "Abhinav R Bharadwaj",
+    "headline": "Full-Stack & AI Engineer at Regilient",
+    "linkedin_url": "https://www.linkedin.com/in/abhinavrbharadwaj",
+    "city": "San Francisco, CA",
+    "current_company": "Regilient",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Full-Stack", "Python", "MERN Stack", "AI Applications", "Web Development"],
+    "photo_url": ""
   }
 ]

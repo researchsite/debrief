@@ -31,7 +31,7 @@ function getClient(): OpenAI {
 
 export async function jsonCompletion<T>(
   messages: ChatCompletionMessageParam[],
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<T> {
   const client = getClient();
   let rawContent: string | null = null;
@@ -42,7 +42,7 @@ export async function jsonCompletion<T>(
         messages,
         response_format: { type: 'json_object' },
       },
-      { signal: options.signal ?? AbortSignal.timeout(20000) },
+      { signal: options.signal ?? AbortSignal.timeout(options.timeoutMs ?? 20_000) },
     );
 
     rawContent = response.choices[0]?.message?.content ?? null;

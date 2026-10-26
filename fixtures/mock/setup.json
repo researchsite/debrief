@@ -1,0 +1,11 @@
+{
+  "data": {
+    "name": "Sham Hassanchi",
+    "linkedinUrl": "https://www.linkedin.com/in/shamhc/",
+    "eventName": "Patch the Conference Hackathon",
+    "eventDate": "2024-10-24",
+    "targetRole": "Principal Solutions Architect",
+    "intents": ["networking", "learning"],
+    "primaryIntent": "networking"
+  }
+}

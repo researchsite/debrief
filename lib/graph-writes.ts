@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { query, roQuery } from './graph';
 
 // ────────────────────────────────────────────────────────────
@@ -119,6 +120,48 @@ export interface SetupInput {
   primaryIntent: string; // must be in intents
 }
 
+export interface SetupData {
+  name: string;
+  linkedinUrl: string;
+  eventName: string;
+  eventDate: string;
+  targetRole: string;
+  intents: string[];
+  primaryIntent: string;
+}
+
+export async function getSetupData(graphName?: string): Promise<SetupData | null> {
+  const result = await roQuery(
+    `MATCH (me:Me)
+     OPTIONAL MATCH (me)-[:ATTENDED]->(e:Event) WHERE e.url IS NULL OR e.url = ''
+     OPTIONAL MATCH (me)-[:WANTS]->(r:Role)
+     OPTIONAL MATCH (me)-[hi:HAS_INTENT]->(i:Intent)
+     RETURN me.name AS name, me.linkedin_url AS linkedinUrl,
+            e.name AS eventName, e.date AS eventDate,
+            r.title AS targetRole,
+            collect({name: i.name, primary: hi.primary}) AS intentsRaw
+     LIMIT 1`,
+    {},
+    graphName,
+  );
+  const row = result.data?.[0];
+  if (!row || !row.linkedinUrl) return null;
+
+  const intentsRaw = Array.isArray(row.intentsRaw) ? row.intentsRaw as Array<{name: string, primary: boolean}> : [];
+  const intents = intentsRaw.map(i => String(i.name)).filter(Boolean);
+  const primary = intentsRaw.find(i => i.primary);
+
+  return {
+    name: String(row.name ?? ''),
+    linkedinUrl: String(row.linkedinUrl ?? ''),
+    eventName: String(row.eventName ?? ''),
+    eventDate: String(row.eventDate ?? ''),
+    targetRole: String(row.targetRole ?? ''),
+    intents,
+    primaryIntent: primary ? String(primary.name) : (intents[0] ?? ''),
+  };
+}
+
 export async function writeSetup(
   input: SetupInput,
   graphName?: string,
@@ -126,9 +169,12 @@ export async function writeSetup(
   const { name, linkedinUrl, eventName, eventDate, targetRole, intents, primaryIntent } =
     input;
 
-  // Create/update Me node
+  // Create/update Me node — MERGE without properties to find ANY existing Me node
+  // and update its URL, so re-running setup with a corrected URL doesn't create a duplicate.
   await query(
-    'MERGE (me:Me {linkedin_url: $url}) SET me.name = $name',
+    `MERGE (me:Me)
+     ON CREATE SET me.linkedin_url = $url, me.name = $name
+     ON MATCH  SET me.linkedin_url = $url, me.name = $name`,
     { url: linkedinUrl, name },
     graphName,
   );
@@ -158,8 +204,13 @@ export async function writeSetup(
   );
 
   // Create/update Intent nodes and relationships.
-  // primary flag is stored on the HAS_INTENT relationship (not the shared Intent node)
-  // to keep each user's primary independent of others sharing the same intent.
+  // Reset all existing primary flags first so only one intent ends up primary.
+  await query(
+    'MATCH (me:Me {linkedin_url: $url})-[r:HAS_INTENT]->(:Intent) SET r.primary = false',
+    { url: linkedinUrl },
+    graphName,
+  );
+
   for (const intent of intents) {
     const isPrimary = intent === primaryIntent;
     await query(
@@ -277,12 +328,16 @@ export async function writePerson(input: PersonInput, graphName?: string): Promi
     );
   }
 
-  // 8. Note HAS_NOTE (CREATE, never MERGE — each note is unique)
-  await query(
-    'MATCH (p:Person {linkedin_url: $url}) CREATE (n:Note {text: $text, created_at: $timestamp}) MERGE (p)-[:HAS_NOTE]->(n)',
-    { url: linkedinUrl, text: noteText, timestamp },
-    graphName,
-  );
+  // 8. Note HAS_NOTE — CREATE both node and edge; MERGE on a fresh CREATE-d node is silently dropped by FalkorDB
+  if (noteText) {
+    await query(
+      `MATCH (p:Person {linkedin_url: $url})
+       CREATE (n:Note {text: $text, created_at: $timestamp, person_url: $url})
+       CREATE (p)-[:HAS_NOTE]->(n)`,
+      { url: linkedinUrl, text: noteText, timestamp },
+      graphName,
+    );
+  }
 
   // 9. If isHiring: link company to the role Me WANTS
   if (isHiring) {
@@ -474,14 +529,16 @@ export async function writeCoupon(input: CouponInput, graphName?: string): Promi
     graphName,
   );
 
-  await query(
-    `MERGE (company:Company {name: $vendor})
-     WITH company
-     MATCH (coupon:Coupon {code: $code})
-     MERGE (coupon)-[:FROM]->(company)`,
-    { vendor, code },
-    graphName,
-  );
+  if (vendor.trim()) {
+    await query(
+      `MERGE (company:Company {name: $vendor})
+       WITH company
+       MATCH (coupon:Coupon {code: $code})
+       MERGE (coupon)-[:FROM]->(company)`,
+      { vendor, code },
+      graphName,
+    );
+  }
 
   await query(
     `MERGE (asset:Asset {file_path: $assetPath})
@@ -575,6 +632,36 @@ export async function markCouponUsed(code: string, graphName?: string): Promise<
   );
 }
 
+export interface CouponUpdate {
+  vendor?: string;
+  value?: string;
+  description?: string;
+  expires?: string | null;
+  terms?: string;
+  redeemUrl?: string;
+}
+
+export async function updateCoupon(code: string, patch: CouponUpdate, graphName?: string): Promise<void> {
+  const sets: string[] = [];
+  const params: Record<string, unknown> = { code };
+  if (patch.vendor !== undefined) { sets.push('c.vendor = $vendor'); params.vendor = patch.vendor; }
+  if (patch.value !== undefined) { sets.push('c.value = $value'); params.value = patch.value; }
+  if (patch.description !== undefined) { sets.push('c.description = $description'); params.description = patch.description; }
+  if (patch.expires !== undefined) { sets.push('c.expires = $expires'); params.expires = patch.expires; }
+  if (patch.terms !== undefined) { sets.push('c.terms = $terms'); params.terms = patch.terms; }
+  if (patch.redeemUrl !== undefined) { sets.push('c.redeem_url = $redeemUrl'); params.redeemUrl = patch.redeemUrl; }
+  if (sets.length === 0) return;
+  await query(`MATCH (c:Coupon {code: $code}) SET ${sets.join(', ')}`, params, graphName);
+  if (patch.vendor?.trim()) {
+    await query(
+      `MERGE (company:Company {name: $vendor})
+       WITH company MATCH (c:Coupon {code: $code}) MERGE (c)-[:FROM]->(company)`,
+      { vendor: patch.vendor, code },
+      graphName,
+    );
+  }
+}
+
 // ────────────────────────────────────────────────────────────
 // Transcript + Conversation graph writes
 // ────────────────────────────────────────────────────────────
@@ -645,17 +732,18 @@ export async function writeConversation(input: ConversationSaveInput, graphName?
     graphName,
   );
 
-  // 3. MET edge from Me to Person — use epoch ms so the today filter works
+  // 3. Ensure Person exists and MET edge exists.
+  //    Avoid path-MERGE `MATCH (me) MERGE (me)-[:MET]->(p:Person {...})` — when Person+MET
+  //    already exist, FalkorDB path-MERGE returns 0 rows, causing steps 4-5 to be skipped.
   await query(
-    `MATCH (me:Me) MERGE (me)-[:MET {at: $timestamp}]->(p:Person {linkedin_url: $personUrl})`,
-    { timestamp, personUrl },
+    'MERGE (p:Person {linkedin_url: $personUrl}) SET p.name = coalesce(p.name, $personName)',
+    { personUrl, personName },
     graphName,
   );
-
-  // Also ensure person has a name set
   await query(
-    `MERGE (p:Person {linkedin_url: $personUrl}) SET p.name = coalesce(p.name, $personName)`,
-    { personUrl, personName },
+    `MATCH (me:Me) MATCH (p:Person {linkedin_url: $personUrl})
+     MERGE (me)-[r:MET]->(p) ON CREATE SET r.at = $timestamp`,
+    { personUrl, timestamp },
     graphName,
   );
 
@@ -668,13 +756,14 @@ export async function writeConversation(input: ConversationSaveInput, graphName?
     graphName,
   );
 
-  // 5. Create Note from summary + key_points
+  // 5. Create Note from summary + key_points — use CREATE for both node and edges;
+  //    MERGE on a node that was CREATE-d in the same query is silently dropped by FalkorDB
   await query(
     `MATCH (conv:Conversation {starts: $starts, ends: $ends})
      MATCH (p:Person {linkedin_url: $personUrl})
-     CREATE (n:Note {text: $noteText, created_at: $timestamp})
-     MERGE (conv)-[:PRODUCED]->(n)
-     MERGE (p)-[:HAS_NOTE]->(n)`,
+     CREATE (n:Note {text: $noteText, created_at: $timestamp, person_url: $personUrl})
+     CREATE (conv)-[:PRODUCED]->(n)
+     CREATE (p)-[:HAS_NOTE]->(n)`,
     { starts, ends, personUrl, noteText, timestamp },
     graphName,
   );
@@ -724,9 +813,11 @@ export async function writeTalkNote(input: TalkNoteInput, graphName?: string): P
   const { sessionTitle, speakerName, noteText, ideas, topics, eventName } = input;
   const timestamp = Date.now();
 
-  // 1. MERGE Session node
+  // 1. MERGE Session node; only overwrite note if one was provided
   await query(
-    'MERGE (s:Session {title: $title}) SET s.at = $timestamp, s.note = $note',
+    noteText
+      ? 'MERGE (s:Session {title: $title}) SET s.at = $timestamp, s.note = $note'
+      : 'MERGE (s:Session {title: $title}) SET s.at = $timestamp',
     { title: sessionTitle, timestamp, note: noteText },
     graphName,
   );
@@ -742,21 +833,34 @@ export async function writeTalkNote(input: TalkNoteInput, graphName?: string): P
     );
   }
 
-  // 3. MERGE speaker Person node
-  await query(
-    'MERGE (speaker:Person {name: $name})',
-    { name: speakerName },
-    graphName,
-  );
+  // 3. MERGE speaker Person node (skip if no name provided)
+  if (speakerName.trim()) {
+    // ON CREATE: assign a stable id so coalesce(p.linkedin_url, p.id) always returns something.
+    // SET COALESCE: backfill existing name-only nodes that have no id yet.
+    await query(
+      'MERGE (speaker:Person {name: $name}) SET speaker.id = COALESCE(speaker.id, $id)',
+      { name: speakerName, id: `speaker:${randomUUID()}` },
+      graphName,
+    );
 
-  // 4. MERGE speaker SPEAKS_AT session
-  await query(
-    `MATCH (speaker:Person {name: $name})
-     MATCH (s:Session {title: $title})
-     MERGE (speaker)-[:SPEAKS_AT]->(s)`,
-    { name: speakerName, title: sessionTitle },
-    graphName,
-  );
+    // 4. MERGE speaker SPEAKS_AT session
+    await query(
+      `MATCH (speaker:Person {name: $name})
+       MATCH (s:Session {title: $title})
+       MERGE (speaker)-[:SPEAKS_AT]->(s)`,
+      { name: speakerName, title: sessionTitle },
+      graphName,
+    );
+
+    // Also mark the speaker as MET so they appear in follow-ups
+    await query(
+      `MATCH (me:Me)
+       MATCH (speaker:Person {name: $name})
+       MERGE (me)-[:MET {at: $at}]->(speaker)`,
+      { name: speakerName, at: timestamp },
+      graphName,
+    );
+  }
 
   // 5. MATCH Me -> SAW session
   await query(
@@ -928,8 +1032,8 @@ export async function getEventSummary(graphName?: string): Promise<{ eventName: 
     `MATCH (me:Me)-[:ATTENDED]->(e:Event)
      MATCH (me)-[r:HAS_INTENT]->(i:Intent) WHERE r.primary = true
      RETURN e.name AS eventName, i.name AS primaryIntent,
-            CASE WHEN e.url IS NOT NULL AND e.url <> '' THEN 0 ELSE 1 END AS priority
-     ORDER BY priority LIMIT 1`,
+            CASE WHEN e.url IS NULL OR e.url = '' THEN 0 ELSE 1 END AS priority
+     ORDER BY priority, id(e) DESC LIMIT 1`,
     {},
     graphName,
   );
@@ -960,7 +1064,10 @@ export interface RecapPerson {
   linkedinUrl: string;
   company: string;
   noteText: string;
+  photoUrl: string;
   contextBullets: ContextBullet[];
+  /** True when this person directly matches the primary intent (e.g. speaker for learning, hiring-company match for job_hunt). False = met but not directly relevant — still shown for reference. */
+  intentMatch: boolean;
   contextFetched?: number;
 }
 
@@ -984,7 +1091,7 @@ export async function getRecapCounts(graphName?: string): Promise<RecapCounts> {
     roQuery('MATCH (me:Me)-[:MET]->(p:Person) RETURN count(p) AS cnt', {}, graphName),
     roQuery('MATCH (me:Me)-[:SAW]->(s:Session) RETURN count(s) AS cnt', {}, graphName),
     roQuery('MATCH (me:Me)-[:SAW]->(s:Session)-[:SPARKED]->(i:Idea) RETURN count(i) AS cnt', {}, graphName),
-    roQuery('MATCH (me:Me)-[:CONNECTED]->(p:Person)<-[:MET]-(me) RETURN count(p) AS cnt', {}, graphName),
+    roQuery('MATCH (me:Me)-[:CONNECTED]->(p:Person) MATCH (me)-[:MET]->(p) RETURN count(DISTINCT p) AS cnt', {}, graphName),
   ]);
 
   return {
@@ -1001,68 +1108,100 @@ export async function getRecapPeopleForIntent(
 ): Promise<RecapPerson[]> {
   let result;
 
+  // All branches return every MET person. intentMatch=true floats relevant ones to the top.
+  // This ensures people met in side-contexts (e.g. a hiring talk when intent=learning)
+  // are still visible for reference, just ranked below intent-matched people.
   if (intent === 'job_hunt') {
-    // Return all people MET; optionally surface hiring-company link if it exists
     result = await roQuery(
       `MATCH (me:Me)-[:MET]->(p:Person)
        OPTIONAL MATCH (me)-[:WANTS]->(r:Role)<-[:HIRING]-(hc:Company)<-[:WORKS_AT]-(p)
        OPTIONAL MATCH (p)-[:WORKS_AT]->(wa:Company)
        OPTIONAL MATCH (p)-[:HAS_NOTE]->(n:Note)
        OPTIONAL MATCH (p)-[:HAS_CONTEXT]->(ctx:Context)
-       RETURN p.name AS name, p.headline AS headline, coalesce(p.linkedin_url, p.id) AS linkedinUrl,
-              coalesce(hc.name, wa.name) AS company, n.text AS noteText, ctx.bullets AS ctxBullets,
-              ctx.fetched_at AS ctxFetched
-       LIMIT 10`,
+       RETURN p.name AS name, p.headline AS headline, coalesce(p.linkedin_url, p.id, p.name) AS linkedinUrl,
+              coalesce(hc.name, wa.name) AS company, n.text AS noteText, coalesce(p.photo_url, '') AS photoUrl,
+              ctx.bullets AS ctxBullets, ctx.fetched_at AS ctxFetched,
+              CASE WHEN hc IS NOT NULL THEN true ELSE false END AS intentMatch
+       ORDER BY CASE WHEN hc IS NOT NULL THEN 0 ELSE 1 END,
+                CASE WHEN n.text IS NOT NULL THEN 0 ELSE 1 END, p.name
+       LIMIT 50`,
       {},
       graphName,
     );
   } else if (intent === 'learning') {
+    // intentMatch = person speaks at a session I SAW; everyone else MET still included below.
+    // noteText: prefer person's own HAS_NOTE, fall back to the session note they spoke at.
     result = await roQuery(
-      `MATCH (me:Me)-[:SAW]->(s:Session)<-[:SPEAKS_AT]-(p:Person)
-       OPTIONAL MATCH (me)-[:MET]->(p)
+      `MATCH (me:Me)-[:MET]->(p:Person)
+       OPTIONAL MATCH (me)-[:SAW]->(s:Session)<-[:SPEAKS_AT]-(p)
        OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
        OPTIONAL MATCH (p)-[:HAS_NOTE]->(n:Note)
        OPTIONAL MATCH (p)-[:HAS_CONTEXT]->(ctx:Context)
-       RETURN p.name AS name, p.headline AS headline, coalesce(p.linkedin_url, p.id) AS linkedinUrl,
-              c.name AS company, n.text AS noteText, ctx.bullets AS ctxBullets,
-              ctx.fetched_at AS ctxFetched
-       LIMIT 10`,
+       RETURN p.name AS name, p.headline AS headline, coalesce(p.linkedin_url, p.id, p.name) AS linkedinUrl,
+              c.name AS company, coalesce(n.text, s.note) AS noteText, coalesce(p.photo_url, '') AS photoUrl,
+              ctx.bullets AS ctxBullets, ctx.fetched_at AS ctxFetched,
+              CASE WHEN s IS NOT NULL THEN true ELSE false END AS intentMatch
+       ORDER BY CASE WHEN s IS NOT NULL THEN 0 ELSE 1 END,
+                CASE WHEN coalesce(n.text, s.note) IS NOT NULL THEN 0 ELSE 1 END, p.name
+       LIMIT 50`,
       {},
       graphName,
     );
   } else {
-    // networking / hiring / default — include everyone MET regardless of company
+    // networking / hiring / default — all MET people, notes first
     result = await roQuery(
       `MATCH (me:Me)-[:MET]->(p:Person)
        OPTIONAL MATCH (p)-[:WORKS_AT]->(c:Company)
        OPTIONAL MATCH (p)-[:HAS_NOTE]->(n:Note)
        OPTIONAL MATCH (p)-[:HAS_CONTEXT]->(ctx:Context)
-       RETURN p.name AS name, p.headline AS headline, coalesce(p.linkedin_url, p.id) AS linkedinUrl,
-              c.name AS company, n.text AS noteText, ctx.bullets AS ctxBullets,
-              ctx.fetched_at AS ctxFetched
-       LIMIT 10`,
+       RETURN p.name AS name, p.headline AS headline, coalesce(p.linkedin_url, p.id, p.name) AS linkedinUrl,
+              c.name AS company, n.text AS noteText, coalesce(p.photo_url, '') AS photoUrl,
+              ctx.bullets AS ctxBullets, ctx.fetched_at AS ctxFetched,
+              true AS intentMatch
+       ORDER BY CASE WHEN n.text IS NOT NULL THEN 0 ELSE 1 END, p.name
+       LIMIT 50`,
       {},
       graphName,
     );
   }
 
-  return (result.data ?? []).map((row: Record<string, unknown>) => {
+  // Deduplicate: primary key = linkedinUrl (stable ID); secondary = name (catches same person
+  // with two nodes — one from linkedin import, one from add-talk — before they get a merged URL).
+  const seen = new Map<string, RecapPerson>();
+  for (const row of (result.data ?? []) as Record<string, unknown>[]) {
     let contextBullets: ContextBullet[] = [];
     try {
       contextBullets = JSON.parse(String(row.ctxBullets ?? '[]')) as ContextBullet[];
     } catch {
       contextBullets = [];
     }
-    return {
+    const person: RecapPerson = {
       name: String(row.name ?? ''),
       headline: String(row.headline ?? ''),
       linkedinUrl: String(row.linkedinUrl ?? ''),
       company: String(row.company ?? ''),
       noteText: String(row.noteText ?? ''),
+      photoUrl: String(row.photoUrl ?? ''),
       contextBullets,
       contextFetched: row.ctxFetched != null ? Number(row.ctxFetched) : undefined,
+      intentMatch: Boolean(row.intentMatch ?? true),
     };
-  });
+    const key = person.linkedinUrl || person.name;
+    const existing = seen.get(key);
+    if (!existing || (!existing.intentMatch && person.intentMatch) || (existing.intentMatch === person.intentMatch && person.noteText.length > existing.noteText.length)) {
+      seen.set(key, person);
+    }
+  }
+  // Secondary pass: collapse any name-only entries that are also present under a real URL.
+  const byName = new Map<string, RecapPerson>();
+  for (const p of seen.values()) byName.set(p.name, p);
+  const urlEntries = [...seen.values()].filter((p) => p.linkedinUrl !== p.name);
+  for (const p of urlEntries) {
+    const nameKey = p.name;
+    if (seen.has(nameKey)) seen.delete(nameKey); // remove the name-keyed duplicate
+    byName.delete(nameKey);
+  }
+  return [...seen.values()];
 }
 
 export async function getRecapIdeas(graphName?: string): Promise<RecapIdea[]> {
@@ -1086,7 +1225,7 @@ export async function saveFollowUp(fu: FollowUpDraft, graphName?: string): Promi
   // Keep the upsert and legacy cleanup atomic, including overlapping requests.
   await query(
     `MATCH (me:Me), (p:Person)
-     WHERE coalesce(p.linkedin_url, p.id) = $url
+     WHERE coalesce(p.linkedin_url, p.id, p.name) = $url
      MERGE (me)-[:FOLLOW_UP]->(f:FollowUp {draft_for: $url})
      SET f.message = $message, f.status = 'todo',
        f.note_source = $noteSource, f.context_source = $contextSource
@@ -1107,6 +1246,138 @@ export async function saveFollowUp(fu: FollowUpDraft, graphName?: string): Promi
     },
     graphName,
   );
+}
+
+// ────────────────────────────────────────────────────────────
+// Hackathon Projects
+// ────────────────────────────────────────────────────────────
+
+export interface HackProject {
+  name: string;
+  team: string;
+  description: string;
+  techStack: string[];
+  tags: string[];       // domain/category tags e.g. ["AI/ML", "Healthcare"]
+  demoUrl: string;      // demo link if different from project page
+  url: string;
+  sourceUrl: string;    // the listing page it was scraped from
+  eventName?: string;   // link to Event node
+}
+
+export interface ProjectAnalysis {
+  common: string[];     // themes / techs that appear across many projects
+  unique: string[];     // standout approaches or rare technologies
+  summary: string;      // 2-3 sentence narrative
+  topTech: string[];    // tech stack entries seen across the most projects
+  projectLinks: { name: string; url: string }[];
+}
+
+export async function writeHackProject(p: HackProject, graphName?: string): Promise<void> {
+  const nodeUrl = p.url || `project:${p.name}`;
+  await query(
+    `MERGE (proj:Project {url: $url})
+     SET proj.name = $name, proj.team = $team, proj.description = $description,
+         proj.tech_stack = $techStack, proj.tags = $tags,
+         proj.demo_url = $demoUrl, proj.source_url = $sourceUrl`,
+    { url: nodeUrl, name: p.name, team: p.team,
+      description: p.description, techStack: p.techStack,
+      tags: p.tags ?? [], demoUrl: p.demoUrl ?? '',
+      sourceUrl: p.sourceUrl },
+    graphName,
+  );
+  if (p.eventName) {
+    await query(
+      `MATCH (proj:Project {url: $url})
+       MATCH (e:Event {name: $eventName})
+       MERGE (proj)-[:SHOWCASED_AT]->(e)`,
+      { url: nodeUrl, eventName: p.eventName },
+      graphName,
+    );
+  }
+}
+
+export async function getHackProjects(sourceUrl: string, graphName?: string): Promise<HackProject[]> {
+  const result = await roQuery(
+    `MATCH (proj:Project {source_url: $sourceUrl})
+     RETURN proj.name AS name, proj.team AS team, proj.description AS description,
+            proj.tech_stack AS techStack, proj.tags AS tags,
+            proj.demo_url AS demoUrl, proj.url AS url, proj.source_url AS sourceUrl`,
+    { sourceUrl },
+    graphName,
+  );
+  return (result.data ?? []).map((row: Record<string, unknown>) => ({
+    name: String(row.name ?? ''),
+    team: String(row.team ?? ''),
+    description: String(row.description ?? ''),
+    techStack: Array.isArray(row.techStack) ? (row.techStack as string[]) : [],
+    tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+    demoUrl: String(row.demoUrl ?? ''),
+    url: String(row.url ?? ''),
+    sourceUrl: String(row.sourceUrl ?? ''),
+  }));
+}
+
+export async function writeProjectAnalysis(
+  analysis: ProjectAnalysis,
+  sourceUrl: string,
+  eventName?: string,
+  graphName?: string,
+): Promise<void> {
+  await query(
+    `MERGE (a:ProjectAnalysis {source_url: $sourceUrl})
+     SET a.common = $common, a.unique = $unique, a.summary = $summary,
+         a.top_tech = $topTech, a.project_links = $projectLinks,
+         a.updated_at = $updatedAt`,
+    {
+      sourceUrl,
+      common: analysis.common,
+      unique: analysis.unique,
+      summary: analysis.summary,
+      topTech: analysis.topTech ?? [],
+      projectLinks: JSON.stringify(analysis.projectLinks ?? []),
+      updatedAt: Date.now(),
+    },
+    graphName,
+  );
+  if (eventName) {
+    await query(
+      `MATCH (a:ProjectAnalysis {source_url: $sourceUrl})
+       MATCH (e:Event {name: $eventName})
+       MERGE (a)-[:ANALYZES]->(e)`,
+      { sourceUrl, eventName },
+      graphName,
+    );
+  }
+}
+
+export async function getProjectAnalysis(sourceUrl: string, graphName?: string): Promise<ProjectAnalysis | null> {
+  const result = await roQuery(
+    `MATCH (a:ProjectAnalysis {source_url: $sourceUrl})
+     RETURN a.common AS common, a.unique AS unique, a.summary AS summary,
+            a.top_tech AS topTech, a.project_links AS projectLinks`,
+    { sourceUrl },
+    graphName,
+  );
+  const row = result.data?.[0] as Record<string, unknown> | undefined;
+  if (!row) return null;
+  let projectLinks: { name: string; url: string }[] = [];
+  try { projectLinks = JSON.parse(String(row.projectLinks ?? '[]')); } catch { /* */ }
+  return {
+    common: Array.isArray(row.common) ? (row.common as string[]) : [],
+    unique: Array.isArray(row.unique) ? (row.unique as string[]) : [],
+    summary: String(row.summary ?? ''),
+    topTech: Array.isArray(row.topTech) ? (row.topTech as string[]) : [],
+    projectLinks,
+  };
+}
+
+export async function getHackProjectSources(graphName?: string): Promise<string[]> {
+  const result = await roQuery(
+    `MATCH (proj:Project) RETURN DISTINCT proj.source_url AS src`,
+    {},
+    graphName,
+  );
+  return (result.data ?? []).map((row: Record<string, unknown>) => String(row.src ?? '')).filter(Boolean);
 }
 
 export async function getFollowUps(

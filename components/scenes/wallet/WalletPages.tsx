@@ -130,6 +130,7 @@ export interface PageContext {
   copiedCode: string | null;
   onCopy: (code: string) => void;
   onMarkUsed: (code: string) => void;
+  onUpdate: (code: string, patch: { vendor?: string; value?: string; description?: string; expires?: string | null }) => Promise<void>;
   onRetry: () => void;
 }
 
@@ -157,6 +158,7 @@ export function WalletPage({ spec, spine, ctx }: { spec: PageSpec; spine: SpineS
               copied={ctx.copiedCode === spec.coupon.code}
               onCopy={ctx.onCopy}
               onMarkUsed={ctx.onMarkUsed}
+              onUpdate={ctx.onUpdate}
             />
             {/* Slot front: the ticket is tucked into this pocket. */}
             <div

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { parseLinkedInCsv } from '../../lib/linkedin-csv';
 
@@ -69,6 +69,24 @@ export default function SetupPage() {
   // Section 6
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+
+  // Pre-populate from graph on mount
+  useEffect(() => {
+    fetch('/api/setup')
+      .then(r => r.ok ? r.json() : null)
+      .then((res: { data?: { name?: string; linkedinUrl?: string; eventName?: string; eventDate?: string; targetRole?: string; intents?: string[]; primaryIntent?: string } | null } | null) => {
+        const d = res?.data;
+        if (!d) return;
+        if (d.name) setName(d.name);
+        if (d.linkedinUrl) setLinkedinUrl(d.linkedinUrl);
+        if (d.eventName) setEventName(d.eventName);
+        if (d.eventDate) setEventDate(d.eventDate);
+        if (d.targetRole) setTargetRole(d.targetRole);
+        if (d.intents?.length) setSelectedIntents(new Set(d.intents as IntentValue[]));
+        if (d.primaryIntent) setPrimaryIntent(d.primaryIntent as IntentValue);
+      })
+      .catch(() => {});
+  }, []);
 
   function toggleIntent(value: IntentValue) {
     setSelectedIntents((prev) => {

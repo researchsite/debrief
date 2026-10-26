@@ -40,7 +40,7 @@ interface FileResult {
   editedResult?: ClassificationResult;
 }
 
-type PageState = 'upload' | 'classifying' | 'review';
+type PageState = 'upload' | 'classifying' | 'review' | 'talk';
 
 interface TranscriptResult {
   id: string;
@@ -58,6 +58,12 @@ export default function ImportPage() {
   const [currentFile, setCurrentFile] = useState('');
   const [fileResults, setFileResults] = useState<FileResult[]>([]);
   const [transcripts, setTranscripts] = useState<TranscriptResult[]>([]);
+  const [talkTitle, setTalkTitle] = useState('');
+  const [talkSpeaker, setTalkSpeaker] = useState('');
+  const [talkNote, setTalkNote] = useState('');
+  const [talkSaving, setTalkSaving] = useState(false);
+  const [talkIdeas, setTalkIdeas] = useState<string[] | null>(null);
+  const [talkError, setTalkError] = useState('');
   const transcriptInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -108,6 +114,28 @@ export default function ImportPage() {
     qrRequests.current.forEach((controller) => controller.abort());
     qrRequests.current.clear();
     setPageState('upload'); setFiles([]); setFileResults([]); setTranscripts([]);
+  }
+
+  async function handleTalkSave() {
+    if (!talkTitle.trim()) return;
+    setTalkSaving(true); setTalkError(''); setTalkIdeas(null);
+    try {
+      const res = await fetch('/api/talk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: talkTitle.trim(), speaker: talkSpeaker.trim(), note: talkNote.trim() }),
+        signal: AbortSignal.timeout(120_000),
+      });
+      const data = await res.json() as { ok: boolean; ideas?: string[]; topics?: string[]; error?: string };
+      if (!data.ok) throw new Error(data.error ?? 'Save failed');
+      setTalkIdeas(data.ideas ?? []);
+      // Reset form for next entry but keep in talk mode
+      setTalkTitle(''); setTalkSpeaker(''); setTalkNote('');
+    } catch (err) {
+      setTalkError(err instanceof Error ? err.message : 'Failed to save talk note');
+    } finally {
+      setTalkSaving(false);
+    }
   }
 
   useEffect(() => {
@@ -189,12 +217,12 @@ export default function ImportPage() {
     }
   }
 
-  const handleSave = async (id: string) => {
+  const handleSave = async (id: string, resultOverride?: unknown) => {
     const fr = fileResults.find((row) => row.id === id);
     if (!fr?.result || fr.saving || fr.resolving) return;
     setFileResults((prev) => prev.map((row) => row.id === id ? { ...row, saving: true, saveError: undefined } : row));
 
-    const resultToSave = fr.editedResult ?? fr.result;
+    const resultToSave = (resultOverride ?? fr.editedResult ?? fr.result) as { kind: string; name?: string };
 
     try {
       const resp = await fetch('/api/import/save', {
@@ -238,15 +266,21 @@ export default function ImportPage() {
   };
   const busy = pageState === 'classifying';
 
+  const isTalkMode = pageState === 'talk';
   const controls = (
     <>
       <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-none sm:gap-3">
-        <CamKey icon="🎙" accent={PX.pink} label="Import Transcript" onClick={() => pick(transcriptInputRef.current)} disabled={busy} />
-        <CamKey icon="📎" accent={PX.sky} label="Pick files" onClick={() => pick(fileInputRef.current)} disabled={busy} />
-        <CamKey icon="📷" accent={PX.sun} label="Pick Photo" onClick={() => pick(imageInputRef.current)} disabled={busy} />
+        <CamKey icon="🎤" accent={PX.grass} label="Log Talk" onClick={() => { clearImports(); setPageState('talk'); setTalkIdeas(null); setTalkError(''); }} disabled={busy} />
+        <CamKey icon="🎙" accent={PX.pink} label="Transcript" onClick={() => pick(transcriptInputRef.current)} disabled={busy || isTalkMode} />
+        <CamKey icon="📎" accent={PX.sky} label="Pick files" onClick={() => pick(fileInputRef.current)} disabled={busy || isTalkMode} />
+        <CamKey icon="📷" accent={PX.sun} label="Pick Photo" onClick={() => pick(imageInputRef.current)} disabled={busy || isTalkMode} />
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center">
-        {pageState === 'review' ? (
+        {isTalkMode ? (
+          <BigKey className="w-full max-w-[8.5rem] sm:w-[78%] sm:max-w-[200px]" disabled={!talkTitle.trim() || talkSaving} onClick={() => void handleTalkSave()}>
+            {talkSaving ? 'Saving…' : 'Save Talk'}
+          </BigKey>
+        ) : pageState === 'review' ? (
           <BigKey className="w-full max-w-[8.5rem] sm:w-[78%] sm:max-w-[200px]" onClick={clearImports}>Import<br />more</BigKey>
         ) : (
           <BigKey className="w-full max-w-[8.5rem] sm:w-[78%] sm:max-w-[200px]" disabled={files.length === 0 || busy} onClick={importWithFlash}>
@@ -302,6 +336,69 @@ export default function ImportPage() {
         )}
       </div>
     );
+  } else if (pageState === 'talk') {
+    screen = (
+      <div className="flex flex-1 flex-col gap-3 text-[var(--px-ink)]">
+        <div className="flex items-center justify-between">
+          <h1 className="font-pixel text-xl sm:text-2xl" style={{ textShadow: '2px 2px 0 var(--px-grass)' }}>Log a Talk</h1>
+          <button type="button" className="font-pixel text-xs opacity-50 hover:opacity-100" onClick={() => { clearImports(); }}>← Back</button>
+        </div>
+
+        {talkIdeas !== null && (
+          <div className="px-panel p-3 space-y-1.5" style={{ borderColor: 'var(--px-grass)', boxShadow: '3px 3px 0 var(--px-grass)' }}>
+            <p className="font-pixel text-sm" style={{ color: 'var(--px-leaf)' }}>✓ Talk saved!</p>
+            {talkIdeas.length > 0 ? (
+              <>
+                <p className="font-pixel text-xs opacity-60">IDEAS EXTRACTED:</p>
+                <ul className="space-y-1">
+                  {talkIdeas.map((idea, i) => (
+                    <li key={i} className="font-pixel-body text-base leading-snug flex gap-2">
+                      <span className="font-pixel text-[10px] opacity-40 shrink-0 mt-0.5">{i + 1}</span>
+                      {idea}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className={`font-pixel-body text-base ${MUTED}`}>No ideas extracted (note was too brief). Talk is still saved.</p>
+            )}
+            <button type="button" className="font-pixel mt-1 text-xs underline" onClick={() => setTalkIdeas(null)}>Log another talk</button>
+          </div>
+        )}
+
+        {talkError && (
+          <p role="alert" className="font-pixel-body border-2 border-[var(--px-ink)] px-2 py-1 text-base text-white" style={{ background: 'var(--px-red)' }}>{talkError}</p>
+        )}
+
+        <div>
+          <label className={LABEL} htmlFor="talk-title">Session / Talk Title *</label>
+          <input id="talk-title" type="text" value={talkTitle} onChange={(e) => setTalkTitle(e.target.value)}
+            placeholder="e.g. Building AI Agents at Scale"
+            className={`${FIELD} mt-1 w-full px-2 py-1.5`}
+            disabled={talkSaving} />
+        </div>
+
+        <div>
+          <label className={LABEL} htmlFor="talk-speaker">Speaker(s)</label>
+          <input id="talk-speaker" type="text" value={talkSpeaker} onChange={(e) => setTalkSpeaker(e.target.value)}
+            placeholder="e.g. Jane Doe, John Smith"
+            className={`${FIELD} mt-1 w-full px-2 py-1.5`}
+            disabled={talkSaving} />
+        </div>
+
+        <div className="flex-1 min-h-0 flex flex-col">
+          <label className={LABEL} htmlFor="talk-note">Your notes &amp; comments</label>
+          <Textarea id="talk-note" value={talkNote} onChange={(e) => setTalkNote(e.target.value)}
+            placeholder="Key points, quotes, ideas that sparked…"
+            className={`${FIELD} mt-1 flex-1 min-h-[100px] resize-none p-2`}
+            disabled={talkSaving} />
+        </div>
+
+        <p className={`font-pixel-body text-sm ${MUTED}`}>
+          AI will extract ideas from your notes and tag the session to the current event.
+        </p>
+      </div>
+    );
   } else if (pageState === 'classifying') {
     screen = (
       <div role="status" className="flex flex-1 flex-col items-center justify-center gap-5 text-[var(--px-ink)]">
@@ -329,7 +426,7 @@ export default function ImportPage() {
             </div>}
             {fr.saveError && <p role="alert" className="font-pixel-body border-2 border-[var(--px-ink)] px-2 py-1 text-base text-white" style={{ background: 'var(--px-red)' }}>{fr.saveError}</p>}
             <fieldset disabled={fr.resolving || fr.saving} className="min-w-0 border-0 p-0">
-              <ReviewCard fr={fr} onSave={() => handleSave(fr.id)} onDismiss={() => handleDismiss(fr.id)} onToggleEdit={() => toggleEdit(fr.id)} onUpdateField={(field, value) => updateEditedField(fr.id, field, value)} />
+              <ReviewCard fr={fr} onSave={() => handleSave(fr.id)} onSaveWithOverride={(result) => handleSave(fr.id, result)} onDismiss={() => handleDismiss(fr.id)} onToggleEdit={() => toggleEdit(fr.id)} onUpdateField={(field, value) => updateEditedField(fr.id, field, value)} />
             </fieldset>
             {fr.qr && !fr.saved && <PxButton variant="ghost" size="sm" onClick={() => handleDismiss(fr.id)}>Dismiss QR</PxButton>}
           </div>
@@ -371,6 +468,7 @@ export default function ImportPage() {
 interface ReviewCardProps {
   fr: FileResult;
   onSave: () => void;
+  onSaveWithOverride: (result: unknown) => void;
   onDismiss: () => void;
   onToggleEdit: () => void;
   onUpdateField: (field: string, value: unknown) => void;
@@ -401,7 +499,7 @@ function Chip({ children, bg = 'var(--px-cream)' }: { children: ReactNode; bg?: 
   return <span className="px-chip" style={{ background: bg }}>{children}</span>;
 }
 
-function ReviewCard({ fr, onSave, onDismiss, onToggleEdit, onUpdateField }: ReviewCardProps) {
+function ReviewCard({ fr, onSave, onSaveWithOverride, onDismiss, onToggleEdit, onUpdateField }: ReviewCardProps) {
   if (fr.saved) {
     return (
       <div className="px-panel p-3" style={{ background: '#dff7df' }}>
@@ -577,15 +675,17 @@ function ReviewCard({ fr, onSave, onDismiss, onToggleEdit, onUpdateField }: Revi
     default: {
       const other = result as { kind: string; text?: string };
       const qrText = other.text ?? '';
-      const upgradeToCoupon = () => {
-        onUpdateField('code', qrText);
-        onUpdateField('vendor', '');
-        onUpdateField('value', '');
-        onUpdateField('description', '');
-        onUpdateField('expires', null);
-        onUpdateField('terms', '');
-        onUpdateField('redeem_url', '');
-        onUpdateField('kind', 'coupon');
+      const saveAsCoupon = () => {
+        onSaveWithOverride({
+          kind: 'coupon',
+          code: qrText,
+          vendor: '',
+          value: '',
+          description: '',
+          expires: null,
+          terms: '',
+          redeem_url: '',
+        });
       };
       return (
         <PxCard title={`📄 ${other.kind === 'qr' ? 'QR Code' : 'Other'}`} accent="var(--px-cream)">
@@ -594,7 +694,7 @@ function ReviewCard({ fr, onSave, onDismiss, onToggleEdit, onUpdateField }: Revi
             <>
               <PxButton variant="ghost" onClick={onToggleEdit}>{isEditing ? 'Done' : 'Edit'}</PxButton>
               <PxButton onClick={onSave}>Save QR details</PxButton>
-              {qrText && <PxButton variant="secondary" onClick={upgradeToCoupon}>Save as Coupon →</PxButton>}
+              {qrText && <PxButton variant="secondary" onClick={saveAsCoupon}>Save as Coupon</PxButton>}
             </>
           )}
           <PxButton variant="secondary" className="w-full" onClick={onDismiss}>Dismiss</PxButton>

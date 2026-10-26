@@ -44,8 +44,10 @@ function getConnectOptions() {
   };
 }
 
-// Owner's LinkedIn URL — update if known; used as the Me node key.
-const OWNER_LINKEDIN_URL = 'https://www.linkedin.com/in/shassanchi';
+// Owner's LinkedIn URL — used as the Me node key.
+// Must match the URL entered during /setup. If blank here, the script will
+// read the existing Me node's URL from the graph (safe to re-run).
+const OWNER_LINKEDIN_URL = 'https://www.linkedin.com/in/shamhc/';
 
 // Derive event name from saved event JSON files so the ATTENDED edge points to the right node
 function getEventNames() {

@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeSetup, type SetupInput } from '@/lib/graph-writes';
+import fs from 'fs';
+import path from 'path';
+import { writeSetup, getSetupData, type SetupInput } from '@/lib/graph-writes';
 
+export async function GET() {
+  if (process.env.USE_MOCK_DATA === 'true') {
+    const fixture = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), 'fixtures/mock/setup.json'), 'utf8'),
+    );
+    return NextResponse.json(fixture);
+  }
+
+  try {
+    const data = await getSetupData('debrief');
+    return NextResponse.json({ data });
+  } catch (err) {
+    console.error('[GET /api/setup]', err);
+    return NextResponse.json({ data: null });
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {

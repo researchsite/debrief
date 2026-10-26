@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ClassificationResultError, normalizeClassificationResult } from '@/lib/classification-result';
-import { writeCoupon, writeAsset } from '@/lib/graph-writes';
+import { writeCoupon, writeAsset, getEventSummary } from '@/lib/graph-writes';
 import { query } from '@/lib/graph';
 import { upsertContactProfile } from '@/lib/person-profile';
 import { qrRecordId, saveQrProvenance } from '@/lib/qr-save';
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
           extractedText: result.title,
         });
 
-        // Write Session node and link Me to it
+        // Write Session node, link Me to it, and link to current event
         if (result.title) {
           await query(
             `MERGE (s:Session {title: $title}) SET s.speaker = $speaker`,
@@ -58,6 +58,16 @@ export async function POST(request: NextRequest) {
             `MATCH (me:Me) MATCH (s:Session {title: $title}) MERGE (me)-[:SAW]->(s)`,
             { title: result.title },
           );
+          // Link session to the current event
+          try {
+            const ev = await getEventSummary('debrief');
+            if (ev?.eventName) {
+              await query(
+                `MATCH (s:Session {title: $title}) MATCH (e:Event {name: $eventName}) MERGE (s)-[:PART_OF]->(e)`,
+                { title: result.title, eventName: ev.eventName },
+              );
+            }
+          } catch { /* non-fatal */ }
         }
 
         // Write Idea nodes with SPARKED edge (not HAS_IDEA)

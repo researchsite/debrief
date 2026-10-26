@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 import {
   getRecapCounts,
   getRecapPeopleForIntent,
@@ -20,6 +22,13 @@ interface RecapResponse {
 }
 
 export async function GET(): Promise<NextResponse<RecapResponse>> {
+  if (process.env.USE_MOCK_DATA === 'true') {
+    const fixture = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), 'fixtures/mock/recap.json'), 'utf8'),
+    ) as RecapResponse;
+    return NextResponse.json(fixture);
+  }
+
   const event = await getEventSummary('debrief');
   const primaryIntent = event?.primaryIntent ?? 'networking';
 

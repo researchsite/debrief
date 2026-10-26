@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, CalendarDays, Upload, Wallet, FileText } from 'lucide-react';
+import { Calendar, CalendarDays, Upload, Wallet, FileText, Cpu } from 'lucide-react';
 
 const navItems = [
   { href: '/event', label: 'Event', icon: CalendarDays },
@@ -10,6 +10,7 @@ const navItems = [
   { href: '/import', label: 'Import', icon: Upload },
   { href: '/wallet', label: 'Wallet', icon: Wallet },
   { href: '/recap', label: 'Recap', icon: FileText },
+  { href: '/projects', label: 'Projects', icon: Cpu },
 ];
 
 export function BottomNav() {

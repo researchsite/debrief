@@ -11,6 +11,7 @@ export interface BDProfile {
   past_companies: string[];
   schools: string[];
   skills: string[];
+  photo_url?: string;
 }
 
 export interface SerpResult {
@@ -152,7 +153,10 @@ export async function serpSearch(
  * Fetch a web page via Bright Data's Web Unlocker.
  * In mock mode returns fixture event page HTML.
  */
-export async function fetchPage(url: string, options: { signal?: AbortSignal } = {}): Promise<string> {
+export async function fetchPage(
+  url: string,
+  options: { signal?: AbortSignal; renderJs?: boolean } = {},
+): Promise<string> {
   if (isMock) {
     return readFixtureRaw('event_page.html');
   }
@@ -160,18 +164,17 @@ export async function fetchPage(url: string, options: { signal?: AbortSignal } =
   const apiKey = process.env.BRIGHTDATA_API_KEY;
   const zone = process.env.BRIGHTDATA_UNLOCKER_ZONE ?? 'web_unlocker1';
 
+  const body: Record<string, unknown> = { zone, url, format: 'json' };
+  if (options.renderJs) body.render_js = true;
+
   const response = await fetch('https://api.brightdata.com/request', {
     method: 'POST',
-    signal: options.signal ?? AbortSignal.timeout(20_000),
+    signal: options.signal ?? AbortSignal.timeout(40_000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      zone,
-      url,
-      format: 'json',
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {

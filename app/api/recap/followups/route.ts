@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
   getRecapPeopleForIntent,
   getEventSummary,
@@ -13,23 +13,34 @@ interface FollowUpResponse {
   error?: string;
 }
 
-export async function POST(): Promise<NextResponse<FollowUpResponse>> {
+export async function POST(req: NextRequest): Promise<NextResponse<FollowUpResponse>> {
   try {
+    const body = await req.json().catch(() => ({})) as { selectedUrls?: string[] };
+    const selectedUrls: string[] | null = Array.isArray(body.selectedUrls) && body.selectedUrls.length > 0
+      ? body.selectedUrls
+      : null;
+
     const event = await getEventSummary('debrief');
     const primaryIntent = event?.primaryIntent ?? 'networking';
 
     const people = await getRecapPeopleForIntent(primaryIntent, 'debrief');
-    // Notes, companies, and meeting edges can produce several rows per contact.
-    const seen = new Set<string>();
-    const top5 = people.filter((person) => {
-      if (!person.linkedinUrl || seen.has(person.linkedinUrl)) return false;
-      seen.add(person.linkedinUrl);
-      return true;
-    }).slice(0, 5);
+
+    let top10;
+    if (selectedUrls) {
+      // User explicitly chose — honour that selection in the given order
+      const byUrl = new Map(people.map((p) => [p.linkedinUrl, p]));
+      top10 = selectedUrls.map((u) => byUrl.get(u)).filter(Boolean) as typeof people;
+    } else {
+      // Auto-select: notes first, then intent matches, up to 10
+      const withNote = people.filter((p) => p.noteText && p.noteText.trim().length >= 10);
+      const seenUrls = new Set(withNote.map((p) => p.linkedinUrl));
+      const intentFill = people.filter((p) => p.intentMatch && !seenUrls.has(p.linkedinUrl));
+      top10 = [...withNote, ...intentFill].slice(0, 10);
+    }
 
     const drafts: FollowUpDraft[] = [];
 
-    for (const person of top5) {
+    for (const person of top10) {
       const contextText = person.contextBullets.map((b) => b.text).join('; ') || 'No research yet';
       const noteText = person.noteText || 'No note taken';
 

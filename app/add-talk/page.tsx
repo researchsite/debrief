@@ -40,6 +40,8 @@ export default function AddTalkPage() {
   // Result
   const [ideas, setIdeas] = useState<string[]>([]);
   const [topics, setTopics] = useState<string[]>([]);
+  const [editingSpeaker, setEditingSpeaker] = useState('');
+  const [speakerSaved, setSpeakerSaved] = useState(false);
 
   // Error
   const [error, setError] = useState('');
@@ -131,6 +133,21 @@ export default function AddTalkPage() {
     }
   }
 
+  async function handleAddSpeaker() {
+    const names = editingSpeaker.trim().split(/[,;]+/).map((s) => s.trim()).filter(Boolean);
+    if (!names.length || !title.trim()) return;
+    for (const name of names) {
+      await fetch('/api/talk/speaker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionTitle: title.trim(), speakerName: name }),
+      });
+    }
+    setSpeakerSaved(true);
+    setEditingSpeaker('');
+    setTimeout(() => setSpeakerSaved(false), 2500);
+  }
+
   function resetForm() {
     setTitle('');
     setSpeaker('');
@@ -144,6 +161,8 @@ export default function AddTalkPage() {
     setSessionMatches([]);
     setSelectedSession(null);
     setShowManual(false);
+    setEditingSpeaker('');
+    setSpeakerSaved(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
@@ -201,6 +220,31 @@ export default function AddTalkPage() {
         {ideas.length === 0 && topics.length === 0 && (
           <p className="text-sm text-muted-foreground">Talk saved. No ideas extracted.</p>
         )}
+
+        {/* Add / correct speaker(s) after saving */}
+        <div className="space-y-1.5 rounded-lg border border-border bg-muted/50 px-3 py-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {speaker ? 'Edit or add more speakers' : 'Add speaker(s)'}
+            {speaker && <span className="ml-1 font-normal normal-case">· saved: {speaker}</span>}
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={editingSpeaker}
+              onChange={(e) => setEditingSpeaker(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && void handleAddSpeaker()}
+              placeholder="Jane Smith, Alex Doe"
+              className="min-w-0 flex-1 rounded-lg border border-input bg-background px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+            <button
+              type="button"
+              onClick={() => void handleAddSpeaker()}
+              className="rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/80 transition-colors"
+            >
+              {speakerSaved ? '✓ Saved' : 'Save'}
+            </button>
+          </div>
+        </div>
 
         <button
           type="button"
@@ -320,7 +364,8 @@ export default function AddTalkPage() {
           </div>
           <div className="space-y-1">
             <label className="text-sm font-medium" htmlFor="talk-speaker">
-              Speaker name
+              Speaker(s){' '}
+              <span className="text-muted-foreground font-normal">(comma-separated for multiple)</span>
             </label>
             <input
               id="talk-speaker"
@@ -328,7 +373,7 @@ export default function AddTalkPage() {
               value={speaker}
               onChange={(e) => setSpeaker(e.target.value)}
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
-              placeholder="e.g. Jane Smith"
+              placeholder="e.g. Jane Smith, Alex Doe"
             />
           </div>
         </>

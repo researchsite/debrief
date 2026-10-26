@@ -1,0 +1,54 @@
+{
+  "plan": [
+    {
+      "name": "Lizz Zhang",
+      "headline": "Developer Relations at FalkorDB",
+      "linkedinUrl": "https://www.linkedin.com/in/lizz-zhang/",
+      "score": 14,
+      "reasons": ["FalkorDB sponsor", "graph database expert", "cloud deployment"],
+      "via": [],
+      "opener": "Your FalkorDB cloud deployment feedback — what's the biggest gap between local dev and production?",
+      "company": "FalkorDB"
+    },
+    {
+      "name": "Kasey Johnson",
+      "headline": "Marketing & Events at Bright Data",
+      "linkedinUrl": "https://www.linkedin.com/in/kasey-johnson-08655b39/",
+      "score": 12,
+      "reasons": ["Bright Data sponsor", "marketing events", "job opportunities"],
+      "via": [],
+      "opener": "You're at the intersection of AI and community events — what kind of events are you seeing the most traction in?",
+      "company": "Bright Data"
+    },
+    {
+      "name": "Joshua Levy",
+      "headline": "Multi-Agent Architecture & AI Systems",
+      "linkedinUrl": "https://www.linkedin.com/in/jlevy",
+      "score": 10,
+      "reasons": ["agent-to-agent architecture", "multi-agent systems", "AI infrastructure"],
+      "via": [],
+      "opener": "Your agent-to-agent work — are agents sharing context via structured messages or something more like shared memory?",
+      "company": ""
+    },
+    {
+      "name": "Sidra Miconi",
+      "headline": "Founder at AgentGlass",
+      "linkedinUrl": "https://www.linkedin.com/in/sidramiconi",
+      "score": 9,
+      "reasons": ["AI agent evaluation", "production readiness", "agent reliability"],
+      "via": [],
+      "opener": "AgentGlass — what's the most common failure mode you see in production agents that teams don't catch in testing?",
+      "company": "AgentGlass"
+    },
+    {
+      "name": "Mannan Shukla",
+      "headline": "Founder at Spawnpoint",
+      "linkedinUrl": "https://www.linkedin.com/in/mannanshukla",
+      "score": 8,
+      "reasons": ["MCP deployment", "agent-driven cloud ops", "developer tooling"],
+      "via": [],
+      "opener": "Spawnpoint — when an agent deploys code, how do you handle rollback if something goes wrong?",
+      "company": "Spawnpoint"
+    }
+  ]
+}
