@@ -11,19 +11,19 @@
   },
   "people": [
     {
-      "name": "Kasey Johnson",
+      "name": "Jordan Mercer",
       "headline": "Marketing & Events at Bright Data",
-      "linkedinUrl": "https://www.linkedin.com/in/kasey-johnson-08655b39/",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-jordan-mercer-00001/",
       "company": "Bright Data",
-      "noteText": "Marketing and events. Discussed marketing events and job opportunities. Kasey is a marketing professional at Bright Data with experience in marketing and community events. A useful contact for future AI events and professional networking.",
+      "noteText": "Marketing and events. Discussed marketing events and job opportunities. A marketing professional at Bright Data with experience in marketing and community events. A useful contact for future AI events and professional networking.",
       "photoUrl": "",
       "contextBullets": [],
       "intentMatch": true
     },
     {
-      "name": "Lizz Zhang",
+      "name": "Sam Chen",
       "headline": "Developer Relations at FalkorDB",
-      "linkedinUrl": "https://www.linkedin.com/in/lizz-zhang/",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-sam-chen-00002/",
       "company": "FalkorDB",
       "noteText": "FalkorDB and deployment. Discussed moving a project from a local environment to the cloud and the differences involved. Also exchanged feedback about SDK scripts versus API usage. Follow up on FalkorDB integration, deployment options, and developer experience.",
       "photoUrl": "",
@@ -31,9 +31,9 @@
       "intentMatch": true
     },
     {
-      "name": "Nancy Li",
+      "name": "Robin Park",
       "headline": "Community Organizer & Tech Events",
-      "linkedinUrl": "https://www.linkedin.com/in/nancyli1/",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-robin-park-00009/",
       "company": "",
       "noteText": "Community and event organizing. Energetic and helpful, with a strong interest in organizing community events around causes such as water and food. A good connection for future community initiatives and tech events.",
       "photoUrl": "",
@@ -41,19 +41,19 @@
       "intentMatch": false
     },
     {
-      "name": "Neil Ricci",
+      "name": "Chris Torres",
       "headline": "Solutions Engineer at Bright Data",
-      "linkedinUrl": "https://www.linkedin.com/in/neil-ricci/",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-chris-torres-00003/",
       "company": "Bright Data",
-      "noteText": "Bright Data and web scraping. Helped us understand Bright Data usage for web scraping, including LinkedIn limitations and UI bugs we encountered. A valuable technical contact for troubleshooting scraping workflows and web data access.",
+      "noteText": "Bright Data and web scraping. Helped understand Bright Data usage for web scraping, including LinkedIn limitations and UI bugs encountered. A valuable technical contact for troubleshooting scraping workflows and web data access.",
       "photoUrl": "",
       "contextBullets": [],
       "intentMatch": true
     },
     {
-      "name": "Kunal Kushwaha",
+      "name": "Dev Sharma",
       "headline": "Developer Advocate at Qodo",
-      "linkedinUrl": "https://www.linkedin.com/in/kunal-kushwaha/",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-dev-sharma-00004/",
       "company": "Qodo",
       "noteText": "Event hosting and Qodo sponsorship. Came from Amsterdam and brought great energy despite the travel and potential jet lag. Helped welcome participants, distribute codes, and support the Qodo sponsor activities. A memorable and energetic presence at the event.",
       "photoUrl": "",
@@ -61,9 +61,9 @@
       "intentMatch": true
     },
     {
-      "name": "Joshua Levy",
+      "name": "Eli Goldman",
       "headline": "Multi-Agent Architecture & AI Systems",
-      "linkedinUrl": "https://www.linkedin.com/in/jlevy",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-eli-goldman-00005/",
       "company": "",
       "noteText": "Agent-to-agent communication. Discussed the idea of agents communicating and collaborating directly with other agents. Follow up on multi-agent architecture, agent handoffs, shared context, and practical agent-to-agent workflows.",
       "photoUrl": "",
@@ -71,9 +71,9 @@
       "intentMatch": true
     },
     {
-      "name": "Sidra Miconi",
+      "name": "Maya Singh",
       "headline": "Founder at AgentGlass",
-      "linkedinUrl": "https://www.linkedin.com/in/sidramiconi",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-maya-singh-00006/",
       "company": "AgentGlass",
       "noteText": "AgentGlass founder. Founder of AgentGlass, focused on AI agent reliability and evaluation. A relevant connection for discussions about agent quality, testing, evaluation, and production readiness.",
       "photoUrl": "",
@@ -81,29 +81,29 @@
       "intentMatch": true
     },
     {
-      "name": "Mannan Shukla",
+      "name": "Aryan Patel",
       "headline": "Founder at Spawnpoint",
-      "linkedinUrl": "https://www.linkedin.com/in/mannanshukla",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-aryan-patel-00007/",
       "company": "Spawnpoint",
-      "noteText": "Developer tools and deployment. Discussed the idea of bringing the tools a team builds together in one place. His profile highlights cloud-native engineering and Spawnpoint, a tool designed to help developers deploy software to the cloud through coding agents and MCP.",
+      "noteText": "Developer tools and deployment. Discussed the idea of bringing the tools a team builds together in one place. Cloud-native engineering focused on a tool designed to help developers deploy software to the cloud through coding agents and MCP.",
       "photoUrl": "",
       "contextBullets": [],
       "intentMatch": true
     },
     {
-      "name": "Claudio Olmedo",
+      "name": "Marco Rivera",
       "headline": "Founder at One Dollar Computer",
-      "linkedinUrl": "https://www.linkedin.com/in/claudioolmedo-com",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-marco-rivera-00008/",
       "company": "One Dollar Computer",
-      "noteText": "One Dollar Computer and robotics. Discussed One Dollar Computer and robotics. His work focuses on making computing and STEM education more accessible. Follow up on low-cost computing, robotics, and hands-on technology education.",
+      "noteText": "One Dollar Computer and robotics. Discussed One Dollar Computer and robotics. Work focuses on making computing and STEM education more accessible. Follow up on low-cost computing, robotics, and hands-on technology education.",
       "photoUrl": "",
       "contextBullets": [],
       "intentMatch": false
     },
     {
-      "name": "Aarsh Sheth",
+      "name": "Ash Kumar",
       "headline": "Backend & Distributed Systems Engineer",
-      "linkedinUrl": "https://www.linkedin.com/in/aarsheth/",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-ash-kumar-00010/",
       "company": "",
       "noteText": "Backend and distributed systems. Discussed backend engineering and distributed systems. A potential contact for exchanging ideas on scalable architectures, backend services, and infrastructure for AI applications.",
       "photoUrl": "",
@@ -111,29 +111,29 @@
       "intentMatch": false
     },
     {
-      "name": "Shesha Sai Kumar Reddy Sadu",
+      "name": "Ravi Reddy",
       "headline": "Geospatial & Data Engineering Specialist",
-      "linkedinUrl": "https://www.linkedin.com/in/ssskr",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-ravi-reddy-00011/",
       "company": "",
-      "noteText": "Geospatial and data expertise. Introduced as a geospatial specialist. Worth reconnecting to learn more about his work in geospatial technologies and explore potential overlap with AI and data-driven applications.",
+      "noteText": "Geospatial and data expertise. Introduced as a geospatial specialist. Worth reconnecting to learn more about geospatial technologies and explore potential overlap with AI and data-driven applications.",
       "photoUrl": "",
       "contextBullets": [],
       "intentMatch": false
     },
     {
-      "name": "Madhu Koseke",
+      "name": "Priya Madhu",
       "headline": "Senior Data Engineer",
-      "linkedinUrl": "https://www.linkedin.com/in/madhukoseke/",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-priya-madhu-00012/",
       "company": "",
-      "noteText": "Teammate and senior data engineer. Useful professional connection for exchanging ideas on data engineering, platforms, and AI projects. His profile describes a focus on data platforms.",
+      "noteText": "Teammate and senior data engineer. Useful professional connection for exchanging ideas on data engineering, platforms, and AI projects. Focus on data platforms and rigorous engineering practices.",
       "photoUrl": "",
       "contextBullets": [],
       "intentMatch": false
     },
     {
-      "name": "Madhughnea Adabala",
+      "name": "Dhruv Adala",
       "headline": "UX & Backend Engineer",
-      "linkedinUrl": "https://www.linkedin.com/in/madhughnea/",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-dhruv-adala-00013/",
       "company": "",
       "noteText": "Teammate and UX. A teammate with a UX focus. Useful to collaborate with on improving user experience, product workflows, and the interface for AI-powered applications.",
       "photoUrl": "",
@@ -141,11 +141,11 @@
       "intentMatch": false
     },
     {
-      "name": "Abhinav R Bharadwaj",
-      "headline": "Full-Stack & AI Engineer at Regilient",
-      "linkedinUrl": "https://www.linkedin.com/in/abhinavrbharadwaj",
-      "company": "Regilient",
-      "noteText": "Full-stack and AI application development. Software engineer at Regilient, with experience in Python, the MERN stack, full-stack development, and AI applications.",
+      "name": "Abhi Bharaj",
+      "headline": "Full-Stack & AI Engineer",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-abhi-bharaj-00014/",
+      "company": "",
+      "noteText": "Full-stack and AI application development. Software engineer with experience in Python, the MERN stack, full-stack development, and AI applications.",
       "photoUrl": "",
       "contextBullets": [],
       "intentMatch": false
@@ -158,7 +158,7 @@
     { "text": "Spawnpoint: deploy software to cloud via coding agents and MCP", "sessionTitle": "Hackathon Conversations", "topics": ["deployment"] },
     { "text": "Use Bright Data for LinkedIn web scraping workflows", "sessionTitle": "Hackathon Conversations", "topics": ["brightdata"] },
     { "text": "FalkorDB SDK vs API: improve developer experience for cloud deployment", "sessionTitle": "Hackathon Conversations", "topics": ["falkordb"] },
-    { "text": "Organize community tech events (water and food causes) with Nancy Li", "sessionTitle": "Hackathon Conversations", "topics": ["community"] },
+    { "text": "Organize community tech events around social causes", "sessionTitle": "Hackathon Conversations", "topics": ["community"] },
     { "text": "Geospatial + AI overlap worth exploring", "sessionTitle": "Hackathon Conversations", "topics": ["geospatial"] },
     { "text": "Qodo developer tools from hackathon sponsor", "sessionTitle": "Hackathon Conversations", "topics": ["developer-tools"] },
     { "text": "Scalable backend architecture for AI applications", "sessionTitle": "Hackathon Conversations", "topics": ["infrastructure"] }

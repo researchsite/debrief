@@ -1,9 +1,9 @@
 {
   "plan": [
     {
-      "name": "Lizz Zhang",
+      "name": "Sam Chen",
       "headline": "Developer Relations at FalkorDB",
-      "linkedinUrl": "https://www.linkedin.com/in/lizz-zhang/",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-sam-chen-00002/",
       "score": 14,
       "reasons": ["FalkorDB sponsor", "graph database expert", "cloud deployment"],
       "via": [],
@@ -11,9 +11,9 @@
       "company": "FalkorDB"
     },
     {
-      "name": "Kasey Johnson",
+      "name": "Jordan Mercer",
       "headline": "Marketing & Events at Bright Data",
-      "linkedinUrl": "https://www.linkedin.com/in/kasey-johnson-08655b39/",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-jordan-mercer-00001/",
       "score": 12,
       "reasons": ["Bright Data sponsor", "marketing events", "job opportunities"],
       "via": [],
@@ -21,9 +21,9 @@
       "company": "Bright Data"
     },
     {
-      "name": "Joshua Levy",
+      "name": "Eli Goldman",
       "headline": "Multi-Agent Architecture & AI Systems",
-      "linkedinUrl": "https://www.linkedin.com/in/jlevy",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-eli-goldman-00005/",
       "score": 10,
       "reasons": ["agent-to-agent architecture", "multi-agent systems", "AI infrastructure"],
       "via": [],
@@ -31,9 +31,9 @@
       "company": ""
     },
     {
-      "name": "Sidra Miconi",
+      "name": "Maya Singh",
       "headline": "Founder at AgentGlass",
-      "linkedinUrl": "https://www.linkedin.com/in/sidramiconi",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-maya-singh-00006/",
       "score": 9,
       "reasons": ["AI agent evaluation", "production readiness", "agent reliability"],
       "via": [],
@@ -41,9 +41,9 @@
       "company": "AgentGlass"
     },
     {
-      "name": "Mannan Shukla",
+      "name": "Aryan Patel",
       "headline": "Founder at Spawnpoint",
-      "linkedinUrl": "https://www.linkedin.com/in/mannanshukla",
+      "linkedinUrl": "https://www.linkedin.com/in/fictional-aryan-patel-00007/",
       "score": 8,
       "reasons": ["MCP deployment", "agent-driven cloud ops", "developer tooling"],
       "via": [],

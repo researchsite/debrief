@@ -35,6 +35,129 @@ Built for the [Patch the Conference Hackathon](https://www.wemakedevs.org/hackat
 
 ---
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Mobile Browser  (Next.js 16 App Router · TypeScript · Tailwind 4)  │
+└─────────────────────────┬───────────────────────────────────────────┘
+                          │ HTTP / fetch
+        ┌─────────────────▼──────────────────────────────┐
+        │              API Routes                         │
+        │  /event/plan · /today · /recap · /person       │
+        │  /research · /followup · /import · /setup      │
+        └──────┬──────────────┬───────────────┬──────────┘
+               │              │               │
+    ┌──────────▼──────┐ ┌─────▼──────┐ ┌─────▼────────────┐
+    │   Bright Data   │ │  OpenAI    │ │  FalkorDB Cloud  │
+    │  ─ Web Unlocker │ │ gpt-4o-mini│ │  (GCP us-central)│
+    │  ─ SERP API     │ │ text+vision│ │                  │
+    │  ─ LinkedIn     │ │ event·slide│ │  Me·Person·Event │
+    │    Datasets     │ │ openers    │ │  Session·Note    │
+    └─────────────────┘ └────────────┘ │  Idea·Company    │
+                                       │  Intent·FollowUp │
+                                       └──────────────────┘
+```
+
+<details>
+<summary>SVG architecture diagram (click to expand)</summary>
+
+```svg
+<svg viewBox="0 0 880 480" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;font-family:system-ui,sans-serif;background:#07101f;border-radius:12px">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#818cf8"/></marker>
+    <marker id="garr" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#4ade80"/></marker>
+  </defs>
+  <!-- User -->
+  <rect x="300" y="20" width="280" height="60" rx="8" fill="#0f1c3a" stroke="#818cf8" stroke-width="1.5"/>
+  <text x="440" y="47" fill="#e0e7ff" font-size="13" font-weight="700" text-anchor="middle">Mobile Browser</text>
+  <text x="440" y="67" fill="#818cf8" font-size="11" text-anchor="middle">Next.js 16 · TypeScript · Tailwind 4</text>
+  <!-- API layer -->
+  <rect x="60" y="140" width="760" height="46" rx="8" fill="#131f3d" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="440" y="160" fill="#4ade80" font-size="11" font-weight="700" text-anchor="middle">API Routes</text>
+  <text x="440" y="176" fill="#86efac" font-size="10" text-anchor="middle">/event/plan · /today · /recap · /person · /research · /followup · /import · /setup</text>
+  <!-- Arrow browser→API -->
+  <line x1="440" y1="80" x2="440" y2="138" stroke="#818cf8" stroke-width="1.5" marker-end="url(#arr)"/>
+  <!-- Services -->
+  <rect x="60" y="250" width="200" height="80" rx="8" fill="#0f2219" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="160" y="276" fill="#4ade80" font-size="13" font-weight="700" text-anchor="middle">Bright Data</text>
+  <text x="160" y="294" fill="#86efac" font-size="10" text-anchor="middle">Web Unlocker (JS pages)</text>
+  <text x="160" y="308" fill="#86efac" font-size="10" text-anchor="middle">SERP · LinkedIn Datasets</text>
+  <rect x="340" y="250" width="200" height="80" rx="8" fill="#1a1a0a" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="440" y="276" fill="#fbbf24" font-size="13" font-weight="700" text-anchor="middle">OpenAI gpt-4o-mini</text>
+  <text x="440" y="294" fill="#fde68a" font-size="10" text-anchor="middle">Event extraction · Slide vision</text>
+  <text x="440" y="308" fill="#fde68a" font-size="10" text-anchor="middle">Opener generation · Follow-ups</text>
+  <rect x="620" y="250" width="200" height="80" rx="8" fill="#0a1428" stroke="#818cf8" stroke-width="1.5"/>
+  <text x="720" y="276" fill="#818cf8" font-size="13" font-weight="700" text-anchor="middle">FalkorDB Cloud</text>
+  <text x="720" y="294" fill="#c7d2fe" font-size="10" text-anchor="middle">GCP us-central1</text>
+  <text x="720" y="308" fill="#c7d2fe" font-size="10" text-anchor="middle">Multi-hop Cypher queries</text>
+  <!-- API→services arrows -->
+  <line x1="160" y1="186" x2="160" y2="248" stroke="#4ade80" stroke-width="1.5" marker-end="url(#garr)"/>
+  <line x1="440" y1="186" x2="440" y2="248" stroke="#4ade80" stroke-width="1.5" marker-end="url(#garr)"/>
+  <line x1="720" y1="186" x2="720" y2="248" stroke="#4ade80" stroke-width="1.5" marker-end="url(#garr)"/>
+  <!-- Bright Data + OpenAI → FalkorDB (data flows in) -->
+  <path d="M 260 290 Q 440 390 620 290" fill="none" stroke="#818cf8" stroke-width="1" stroke-dasharray="5 3" marker-end="url(#arr)"/>
+  <text x="440" y="385" fill="#818cf8" font-size="10" text-anchor="middle" font-style="italic">enriched nodes + generated text → graph</text>
+  <!-- Graph node labels -->
+  <rect x="620" y="360" width="200" height="90" rx="8" fill="#071530" stroke="#818cf8" stroke-width="2"/>
+  <text x="720" y="382" fill="#e0e7ff" font-size="11" font-weight="700" text-anchor="middle">Graph nodes</text>
+  <text x="720" y="398" fill="#818cf8" font-size="10" text-anchor="middle">Me · Person · Event · Session</text>
+  <text x="720" y="413" fill="#818cf8" font-size="10" text-anchor="middle">Company · Note · Idea · Intent</text>
+  <text x="720" y="428" fill="#818cf8" font-size="10" text-anchor="middle">Context · FollowUp · Coupon</text>
+  <line x1="720" y1="330" x2="720" y2="358" stroke="#818cf8" stroke-width="1.5" marker-end="url(#arr)"/>
+</svg>
+```
+
+</details>
+
+---
+
+## Graph Schema
+
+```
+(Me)-[:HAS_INTENT]->(Intent)           # networking / hiring / learning
+(Me)-[:ATTENDED]->(Event)
+(Event)-[:HAS_SESSION]->(Session)
+(Session)-[:SPEAKS_AT]-(Person)
+(Me)-[:MET]->(Person)
+(Me)-[:CONNECTED]->(Person)            # from LinkedIn connections CSV
+(Me)-[:SAW]->(Session)
+(Person)-[:WORKS_AT]->(Company)
+(Person)-[:HAS_NOTE]->(Note)           # your words, immutable
+(Person)-[:HAS_CONTEXT]->(Context)     # AI research, separate from note
+(Session)-[:SPARKED]->(Idea)
+(Me)-[:PLANS_TO_MEET { score, opener }]->(Person)
+(Me)-[:CONNECTED]->(bridge:Person)-[:WORKS_AT]->(co:Company)
+     <-[:WORKS_AT]-(speaker:Person)    # warm-intro path (3 hops)
+```
+
+---
+
+## Project outcomes
+
+| Metric | Value |
+|---|---|
+| PRs merged | 19 |
+| Total PRs raised | 26 |
+| Tests (Vitest) | 119 |
+| People tracked at event | 14 |
+| Ideas captured | 10 |
+| Sessions logged | 10 |
+| Graph nodes (end of day) | 2,307 |
+| Graph relationships | 2,677 |
+| API spend (full day) | < $2 (gpt-4o-mini) |
+| Time to ranked meet plan | ~30 seconds |
+
+---
+
+## Mock mode — no API keys needed
+
+Set `USE_MOCK_DATA=true` in `.env.local` and the app returns fixture data on every API route. All pages are fully functional without FalkorDB, OpenAI, or Bright Data credentials.
+
+The committed fixture data uses **fictional personas only** — no real personal data is committed to this repository.
+
+---
+
 ## Setup
 
 ### Prerequisites
