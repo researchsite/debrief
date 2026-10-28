@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extractEventFromUrl, type EventExtraction } from '@/lib/event-extract';
+
+export const maxDuration = 120;
 import { getMeetPlan, getStoredEvents, getSessions, type MeetPlanEntry } from '@/lib/graph-writes';
 import fs from 'fs';
 import path from 'path';
@@ -63,9 +65,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<ResponseBody>
 
     return NextResponse.json({ ok: true, extraction, meetPlan });
   } catch (err) {
-    console.error('[POST /api/event]', err);
+    console.error('[POST /api/event]', err instanceof Error ? (err.stack ?? err.message) : err);
     return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : 'Internal server error' },
+      { ok: false, error: err instanceof Error && err.message ? err.message : 'Internal server error' },
       { status: 500 },
     );
   }

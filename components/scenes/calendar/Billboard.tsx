@@ -12,15 +12,20 @@ interface BillboardProps {
   /** Time the data was loaded; relative times are computed against it. */
   now: number;
   onRetry: () => void;
+  /** Set of session titles the user has marked attended. */
+  attended?: Set<string>;
+  /** Called when user taps the attended button on a session row. */
+  onMarkAttended?: (title: string) => void;
 }
 
 const ICONS: Record<TimelineEntry['type'], string> = {
   person: '👤',
   talk: '🎤',
   coupon: '🎟️',
+  session: '🗓',
 };
 
-export function Billboard({ state, event, sections, now, onRetry }: BillboardProps) {
+export function Billboard({ state, event, sections, now, onRetry, attended, onMarkAttended }: BillboardProps) {
   const isEmpty = state === 'ready' && sections.every((s) => s.entries.length === 0);
 
   return (
@@ -65,13 +70,18 @@ export function Billboard({ state, event, sections, now, onRetry }: BillboardPro
                 <h2 className={styles.dayLabel}>{section.label}</h2>
                 {section.entries.length === 0 ? (
                   <p className={styles.emptyLine}>
-                    {section.key === 'today' ? 'Nothing captured yet today.' : 'Nothing scheduled yet'}
+                    {section.key === 'today' ? 'Nothing captured yet today.' : section.key === 'schedule' ? 'No sessions scheduled.' : 'Nothing scheduled yet'}
                   </p>
                 ) : (
                   <ul className={styles.rows}>
                     {section.entries.map((entry) => (
                       <li key={entryKey(entry)}>
-                        <BoardRow entry={entry} now={now} />
+                        <BoardRow
+                          entry={entry}
+                          now={now}
+                          isAttended={entry.type === 'session' ? (attended?.has(entry.title) ?? false) : undefined}
+                          onMarkAttended={entry.type === 'session' ? onMarkAttended : undefined}
+                        />
                       </li>
                     ))}
                   </ul>
@@ -84,7 +94,17 @@ export function Billboard({ state, event, sections, now, onRetry }: BillboardPro
   );
 }
 
-function BoardRow({ entry, now }: { entry: TimelineEntry; now: number }) {
+function BoardRow({
+  entry,
+  now,
+  isAttended,
+  onMarkAttended,
+}: {
+  entry: TimelineEntry;
+  now: number;
+  isAttended?: boolean;
+  onMarkAttended?: (title: string) => void;
+}) {
   const content = (
     <>
       <span className={styles.rowIcon} aria-hidden="true">
@@ -98,12 +118,43 @@ function BoardRow({ entry, now }: { entry: TimelineEntry; now: number }) {
     </>
   );
 
+  const attendBtn = onMarkAttended && (
+    <button
+      type="button"
+      aria-label={isAttended ? 'Attended' : 'Mark attended'}
+      title={isAttended ? 'Attended' : 'Mark attended'}
+      onClick={(e) => { e.preventDefault(); if (!isAttended) onMarkAttended(entry.title); }}
+      style={{
+        marginLeft: 6,
+        padding: '2px 7px',
+        fontSize: 11,
+        fontFamily: 'inherit',
+        border: '2px solid currentColor',
+        borderRadius: 3,
+        background: isAttended ? '#22c55e' : 'transparent',
+        color: isAttended ? '#fff' : 'inherit',
+        cursor: isAttended ? 'default' : 'pointer',
+        flexShrink: 0,
+      }}
+    >
+      {isAttended ? '✓' : '+ Attended'}
+    </button>
+  );
+
   if (entry.url) {
     return (
-      <Link href={entry.url} className={`${styles.row} ${styles.rowLink}`}>
-        {content}
-      </Link>
+      <div className={styles.row} style={{ display: 'flex', alignItems: 'center' }}>
+        <Link href={entry.url} className={styles.rowLink} style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+          {content}
+        </Link>
+        {attendBtn}
+      </div>
     );
   }
-  return <div className={styles.row}>{content}</div>;
+  return (
+    <div className={styles.row} style={{ display: 'flex', alignItems: 'center' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>{content}</div>
+      {attendBtn}
+    </div>
+  );
 }

@@ -9,9 +9,10 @@ export type { WalletStatus } from './WalletPages';
 
 const WIDE_QUERY = '(min-width: 640px)';
 const REDUCED_QUERY = '(prefers-reduced-motion: reduce)';
-/** Blank card-slot pages between the inside cover and the first coupon. */
+/** Blank card-slot pages shown only when the wallet is empty. */
 const BLANK_PAGES = 2;
-const FIRST_CONTENT_PAGE = 1 + BLANK_PAGES;
+/** When coupons exist, content starts on page index 1 (right after the cover). */
+const FIRST_CONTENT_PAGE = 1;
 /** Progress units per pixel of wheel delta; ~330px of scroll turns one page. */
 const SENSITIVITY = 0.003;
 /** Fraction of a page a gesture must move to commit to the next page. */
@@ -38,6 +39,7 @@ export interface WalletSceneProps {
   copiedCode: string | null;
   onCopy: (code: string) => void;
   onMarkUsed: (code: string) => void;
+  onUpdate: (code: string, patch: { vendor?: string; value?: string; description?: string; expires?: string | null }) => Promise<void>;
   onRetry: () => void;
 }
 
@@ -56,6 +58,7 @@ export function WalletScene({
   copiedCode,
   onCopy,
   onMarkUsed,
+  onUpdate,
   onRetry,
 }: WalletSceneProps) {
   const wide = useMedia(WIDE_QUERY, true);
@@ -63,10 +66,12 @@ export function WalletScene({
 
   const pages = useMemo<PageSpec[]>(() => {
     const list: PageSpec[] = [{ kind: 'cover' }];
-    for (let i = 0; i < BLANK_PAGES; i++) list.push({ kind: 'slots', key: `slots-${i}` });
     if (status === 'ready' && items.length > 0) {
+      // Slots filled — go straight to coupons after the cover, no blank pages needed.
       for (const coupon of items) list.push({ kind: 'coupon', coupon });
     } else {
+      // Empty wallet: show decorative card-slot pages, then the empty/error message.
+      for (let i = 0; i < BLANK_PAGES; i++) list.push({ kind: 'slots', key: `slots-${i}` });
       list.push({ kind: 'message' });
     }
     return list;
@@ -174,6 +179,7 @@ export function WalletScene({
     copiedCode,
     onCopy,
     onMarkUsed,
+    onUpdate,
     onRetry,
   };
 

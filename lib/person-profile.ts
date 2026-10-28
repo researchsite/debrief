@@ -14,6 +14,7 @@ export interface PersonProfile {
   skills: string[];
   email?: string;
   phone?: string;
+  photo_url?: string;
 }
 
 export function normalizeLinkedInUrl(value: string): string {
@@ -39,12 +40,18 @@ export function normalizeProfile(value: unknown, linkedinUrl: string): PersonPro
   const row = object(value);
   const name = text(row.name) || [text(row.first_name), text(row.last_name)].filter(Boolean).join(' ');
   if (!name || row.error) return null;
+  const photoUrl = typeof row.photo_url === 'string' ? row.photo_url.trim()
+    : typeof row.profile_pic_url === 'string' ? row.profile_pic_url.trim()
+    : typeof row.profile_image_url === 'string' ? row.profile_image_url.trim()
+    : typeof row.thumbnail === 'string' ? row.thumbnail.trim()
+    : undefined;
   return {
     id: typeof row.id === 'string' ? row.id : undefined, linkedin_url: linkedinUrl, name,
     headline: text(row.headline) || text(row.position), city: text(row.city) || text(row.location),
     current_company: text(row.current_company),
     past_companies: strings(row.past_companies ?? (Array.isArray(row.experience) ? row.experience.map((entry) => object(entry).company) : [])),
     schools: strings(row.schools ?? row.education), skills: strings(row.skills), email: text(row.email), phone: text(row.phone),
+    photo_url: photoUrl || undefined,
   };
 }
 export async function findStoredProfile(key: string, graphName?: string): Promise<PersonProfile | null> {
@@ -58,13 +65,14 @@ export async function findStoredProfile(key: string, graphName?: string): Promis
      OPTIONAL MATCH (p)-[:STUDIED_AT]->(school:School)
      OPTIONAL MATCH (p)-[:HAS_SKILL]->(skill:Skill)
      RETURN p.id AS id, p.linkedin_url AS linkedin_url, p.name AS name, p.headline AS headline,
-       p.city AS city, p.email AS email, p.phone AS phone, collect(DISTINCT company.name) AS companies,
+       p.city AS city, p.email AS email, p.phone AS phone, p.photo_url AS photo_url,
+       collect(DISTINCT company.name) AS companies,
        collect(DISTINCT past.name) AS past_companies, collect(DISTINCT school.name) AS schools,
        collect(DISTINCT skill.name) AS skills LIMIT 1`, { key, urls }, graphName,
   );
   const row = result.data?.[0];
   if (!row?.name) return null;
-  return normalizeProfile({ ...row, current_company: Array.isArray(row.companies) ? row.companies[0] : '' }, typeof row.linkedin_url === 'string' ? row.linkedin_url : canonical);
+  return normalizeProfile({ ...row, current_company: Array.isArray(row.companies) ? row.companies[0] : '', photo_url: row.photo_url }, typeof row.linkedin_url === 'string' ? row.linkedin_url : canonical);
 }
 export async function resolvePersonProfile(url: string, signal?: AbortSignal, graphName?: string): Promise<PersonProfile | null> {
   const canonical = normalizeLinkedInUrl(url);
@@ -81,7 +89,7 @@ export async function upsertContactProfile(profile: PersonProfile, graphName?: s
   const storedUrl = existing?.linkedin_url || url;
   const identity = storedUrl ? '{linkedin_url: $url}' : '{id: $id}';
   const props: Record<string, string> = {};
-  for (const field of ['name', 'headline', 'city', 'email', 'phone'] as const) if (profile[field]) props[field] = profile[field]!;
+  for (const field of ['name', 'headline', 'city', 'email', 'phone', 'photo_url'] as const) if (profile[field]) props[field] = profile[field]!;
   if (!profile.name) throw new Error('A contact name is required.');
   await query(`MERGE (p:Person ${identity}) SET p.id = $id, p += $props`, { url: storedUrl, id, props }, graphName);
   const groups: [string, string, string[]][] = [

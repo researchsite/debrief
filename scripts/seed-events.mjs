@@ -13,7 +13,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const EVENTS_DIR = path.join(__dirname, '..', '_private', 'events');
+const ROOT = path.join(__dirname, '..');
+const EVENTS_DIR = path.join(ROOT, '_private', 'events');
 
 const args = process.argv.slice(2);
 const graphArg = args.indexOf('--graph');
@@ -25,13 +26,40 @@ const cyan = (s) => `\x1b[36m${s}\x1b[0m`;
 const green = (s) => `\x1b[32m${s}\x1b[0m`;
 const yellow = (s) => `\x1b[33m${s}\x1b[0m`;
 
+// ─── load .env.local ─────────────────────────────────────────────────────────
+
+function loadEnv() {
+  const envPath = path.join(ROOT, '.env.local');
+  if (!fs.existsSync(envPath)) return;
+  for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+    const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+    if (m) process.env[m[1]] = m[2].replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
+  }
+}
+loadEnv();
+
+function getConnectOptions() {
+  const url = process.env.FALKORDB_URL;
+  if (url) return { url };
+  const host = process.env.FALKORDB_HOST ?? 'localhost';
+  const port = parseInt(process.env.FALKORDB_PORT ?? '6379', 10);
+  const username = process.env.FALKORDB_USERNAME;
+  const password = process.env.FALKORDB_PASSWORD;
+  const ssl = process.env.FALKORDB_SSL === 'true';
+  return {
+    socket: { host, port, tls: ssl },
+    ...(username && { username }),
+    ...(password && { password }),
+  };
+}
+
 // ─── connect ─────────────────────────────────────────────────────────────────
 
-const db = await FalkorDB.connect({ socket: { host: 'localhost', port: 6379 } });
+const db = await FalkorDB.connect(getConnectOptions());
 const graph = db.selectGraph(GRAPH);
 
 async function run(cypher, params = {}) {
-  return graph.query(cypher, params);
+  return graph.query(cypher, { params });
 }
 
 // ─── read saved event files ──────────────────────────────────────────────────
@@ -66,22 +94,28 @@ for (const file of files) {
   console.log(`   Saved:    ${savedAt}`);
   console.log(`   Sessions: ${sessions.length}`);
 
-  // Write Event node
+  // Write Event node and link Me to it
   await run(
     `MERGE (e:Event {name: $name})
      SET e.date = $date, e.venue = $venue, e.url = $url`,
     { name: event.name, date: event.date, venue: event.venue, url },
   );
+  // Link Me-[:ATTENDED]->Event so the calendar query can find it
+  await run(
+    `MATCH (me:Me) MATCH (e:Event {name: $name}) MERGE (me)-[:ATTENDED]->(e)`,
+    { name: event.name },
+  );
 
   for (const session of sessions) {
     totalSessions++;
 
-    // Write Session node
+    // Write Session node with PART_OF edge (matches calendar query)
     await run(
-      `MERGE (e:Event {name: $eventName})
-       MERGE (s:Session {title: $title, starts: $starts})
+      `MERGE (s:Session {title: $title, starts: $starts})
        SET s.ends = $ends, s.room = $room, s.abstract = $abstract
-       MERGE (e)-[:HAS_SESSION]->(s)`,
+       WITH s
+       MATCH (e:Event {name: $eventName})
+       MERGE (s)-[:PART_OF]->(e)`,
       {
         eventName: event.name,
         title: session.title,

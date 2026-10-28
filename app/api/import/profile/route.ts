@@ -132,9 +132,9 @@ export async function POST(req: NextRequest) {
       skills: skillsCount,
     });
   } catch (err) {
-    console.error('[POST /api/import/profile]', err);
+    console.error('[POST /api/import/profile]', err instanceof Error ? (err.stack ?? err.message) : err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
+      { error: err instanceof Error && err.message ? err.message : 'Profile import failed' },
       { status: 500 },
     );
   }

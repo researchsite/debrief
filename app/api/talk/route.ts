@@ -85,14 +85,31 @@ export async function POST(req: NextRequest): Promise<NextResponse<ResponseBody>
   }
 
   // 3. Write talk note to graph
+  // Support comma-separated multiple speakers; empty speaker is fine (no Person node created)
+  const speakerList = speaker.trim()
+    ? speaker.trim().split(/[,;]+/).map((s) => s.trim()).filter(Boolean)
+    : [''];
+
   await writeTalkNote({
     sessionTitle: title.trim(),
-    speakerName: speaker.trim() || 'Unknown Speaker',
+    speakerName: speakerList[0],
     noteText: note,
     ideas,
     topics,
     eventName,
   });
+
+  // Additional speakers: add SPEAKS_AT + MET edges without duplicating notes/ideas
+  for (const extra of speakerList.slice(1)) {
+    await writeTalkNote({
+      sessionTitle: title.trim(),
+      speakerName: extra,
+      noteText: '',
+      ideas: [],
+      topics: [],
+      eventName,
+    });
+  }
 
   return NextResponse.json({ ok: true, ideas, topics });
 }

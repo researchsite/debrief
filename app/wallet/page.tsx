@@ -3,8 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { CouponData } from '@/lib/graph-writes';
 import { WalletScene, type WalletStatus } from '@/components/scenes/wallet/WalletScene';
+import { useViewMode } from '@/hooks/useViewMode';
 
 export default function WalletPage() {
+  const { classic, toggle } = useViewMode();
   const [coupons, setCoupons] = useState<CouponData[]>([]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<WalletStatus>('loading');
@@ -62,6 +64,15 @@ export default function WalletPage() {
     setCoupons((prev) => prev.map((c) => (c.code === code ? { ...c, used: true } : c)));
   }, []);
 
+  const handleUpdate = useCallback(async (code: string, patch: { vendor?: string; value?: string; description?: string; expires?: string | null }) => {
+    await fetch(`/api/wallet/${encodeURIComponent(code)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    setCoupons((prev) => prev.map((c) => (c.code === code ? { ...c, ...patch } : c)));
+  }, []);
+
   const handleCopy = useCallback((code: string) => {
     navigator.clipboard.writeText(code).catch(() => {});
     setCopiedCode(code);
@@ -87,10 +98,11 @@ export default function WalletPage() {
   return (
     <div
       className="flex h-[calc(100svh-64px)] flex-col gap-3 overflow-hidden px-4 pt-4 pb-3 text-[#1b1530]"
-      style={{
+      style={classic ? {
+        backgroundColor: '#fff7e6',
+      } : {
         backgroundColor: '#8fdcff',
-        backgroundImage:
-          'repeating-conic-gradient(#7fd3ff 0% 25%, transparent 0% 50%)',
+        backgroundImage: 'repeating-conic-gradient(#7fd3ff 0% 25%, transparent 0% 50%)',
         backgroundSize: '48px 48px',
       }}
     >
@@ -111,6 +123,10 @@ export default function WalletPage() {
           className="font-pixel-body min-w-0 flex-1 basis-[220px] border-4 border-[#1b1530] bg-[#fff7e6] px-3 py-1 text-xl outline-none focus-visible:outline-3 focus-visible:outline-dashed focus-visible:outline-[#8b5cf6]"
           aria-label="Search wallet"
         />
+        <button type="button" onClick={toggle}
+          className="px-chip bg-[#fff7e6] text-[#1b1530] !py-0.5 cursor-pointer shrink-0">
+          {classic ? 'Scene view' : 'Classic view'}
+        </button>
       </div>
 
       <WalletScene
@@ -121,6 +137,7 @@ export default function WalletPage() {
         copiedCode={copiedCode}
         onCopy={handleCopy}
         onMarkUsed={handleMarkUsed}
+        onUpdate={handleUpdate}
         onRetry={handleRetry}
       />
     </div>

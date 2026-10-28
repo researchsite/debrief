@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { markCouponUsed } from '@/lib/graph-writes';
+import { markCouponUsed, updateCoupon } from '@/lib/graph-writes';
 
 export async function PATCH(
   request: NextRequest,
@@ -7,15 +7,21 @@ export async function PATCH(
 ) {
   try {
     const { code } = await params;
-    const body = await request.json() as { used?: boolean };
+    const decodedCode = decodeURIComponent(code);
+    const body = await request.json() as { used?: boolean; vendor?: string; value?: string; description?: string; expires?: string | null; terms?: string; redeemUrl?: string };
 
     if (body.used === true) {
-      await markCouponUsed(decodeURIComponent(code));
+      await markCouponUsed(decodedCode);
+    }
+
+    const { used: _used, ...patch } = body;
+    if (Object.keys(patch).length > 0) {
+      await updateCoupon(decodedCode, patch);
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('[wallet/used] error:', err);
+    console.error('[wallet/patch] error:', err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Update failed' },
       { status: 500 },

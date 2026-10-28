@@ -10,6 +10,7 @@ import type {
   FollowUpDraft,
 } from '@/lib/graph-writes';
 import { RecapScene } from '@/components/scenes/recap/RecapScene';
+import { useViewMode } from '@/hooks/useViewMode';
 
 interface RecapData {
   counts: RecapCounts;
@@ -90,13 +91,46 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="rcp-title text-base sm:text-lg">{children}</h2>;
 }
 
+const AVATAR_HUES = [270, 320, 200, 30, 160, 0, 55, 240];
+
+function PersonAvatar({ name, photo, size = 40 }: { name: string; photo?: string; size?: number }) {
+  const initials = name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+  const hue = AVATAR_HUES[name.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_HUES.length];
+  return photo ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={photo}
+      alt={name}
+      width={size}
+      height={size}
+      style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border: '2px solid rgba(91,78,148,0.2)' }}
+    />
+  ) : (
+    <div
+      aria-hidden
+      style={{
+        width: size, height: size, borderRadius: '50%',
+        background: `hsl(${hue}, 55%, 46%)`,
+        color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: size * 0.38, fontWeight: 700, letterSpacing: '-0.02em',
+        border: '2px solid rgba(91,78,148,0.15)', flexShrink: 0,
+      }}
+    >
+      {initials}
+    </div>
+  );
+}
+
 export default function RecapPage() {
+  const { classic, toggle } = useViewMode();
   const [data, setData] = useState<RecapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [peopleFilter, setPeopleFilter] = useState('');
+  const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function fetchData() {
@@ -115,15 +149,28 @@ export default function RecapPage() {
     setGenerating(true);
     setGenerateError(null);
     try {
-      const res = await fetch('/api/recap/followups', { method: 'POST' });
+      const body = selectedUrls.size > 0 ? { selectedUrls: [...selectedUrls] } : {};
+      const res = await fetch('/api/recap/followups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
       if (!res.ok) throw new Error(`Follow-up generation failed (${res.status})`);
-      // Refresh recap data to pick up new follow-ups
       setData(await loadRecap());
+      setSelectedUrls(new Set());
     } catch (err) {
       setGenerateError(err instanceof Error ? err.message : 'Follow-up generation failed');
     } finally {
       setGenerating(false);
     }
+  }
+
+  function togglePerson(url: string) {
+    setSelectedUrls((prev) => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url); else next.add(url);
+      return next;
+    });
   }
 
   async function handleCopy(text: string, idx: number) {
@@ -136,20 +183,48 @@ export default function RecapPage() {
     }
   }
 
-  if (loading) {
+  // Toggle button shown on all states
+  const ViewToggle = () => (
+    <button type="button" onClick={toggle}
+      className="px-chip fixed top-2 right-2 z-50 bg-[var(--px-paper)] text-[var(--px-ink)] !py-0.5 cursor-pointer">
+      {classic ? 'Scene view' : 'Classic view'}
+    </button>
+  );
+
+  // Wrapper: classic = plain scroll div, else animated RecapScene
+  function Wrap({ children }: { children: React.ReactNode }) {
+    if (classic) {
+      return (
+        <div className="relative min-h-[calc(100svh-64px)] overflow-y-auto bg-[var(--px-paper)] px-4 pt-10 pb-6">
+          <ViewToggle />
+          {children}
+        </div>
+      );
+    }
     return (
       <RecapScene>
-        <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-          <div className="rcp-loader" />
-          <p className="rcp-title text-lg">Remembering your conference...</p>
+        <div className="relative">
+          <ViewToggle />
+          {children}
         </div>
       </RecapScene>
     );
   }
 
+  if (loading) {
+    return (
+      <Wrap>
+        <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+          <div className="rcp-loader" />
+          <p className="rcp-title text-lg">Remembering your conference...</p>
+        </div>
+      </Wrap>
+    );
+  }
+
   if (!data || loadError) {
     return (
-      <RecapScene>
+      <Wrap>
         <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
           <p className="rcp-title text-xl text-[#d93648]">Hmm, I can&apos;t recall...</p>
           <p className="text-sm text-[color:var(--rcp-muted)]">Could not load recap data.</p>
@@ -157,16 +232,22 @@ export default function RecapPage() {
             Try again
           </button>
         </div>
-      </RecapScene>
+      </Wrap>
     );
   }
 
   const { counts, event, people, ideas, followUps } = data;
   const primaryIntent = event?.primaryIntent ?? 'networking';
   const ideaGroups = groupIdeasByTopic(ideas);
+  const pf = peopleFilter.trim().toLowerCase();
+  const allFiltered = pf
+    ? people.filter((p) => p.name.toLowerCase().includes(pf) || (p.company ?? '').toLowerCase().includes(pf))
+    : people;
+  const primaryPeople = allFiltered.filter((p) => p.intentMatch);
+  const otherPeople = allFiltered.filter((p) => !p.intentMatch);
 
   return (
-    <RecapScene>
+    <Wrap>
       <div className="space-y-4 sm:space-y-5">
         {/* Header */}
         <header className="space-y-1">
@@ -190,36 +271,129 @@ export default function RecapPage() {
           )}
         </section>
 
+        {/* Face gallery — quick visual reference; dedup by name in case someone has two nodes */}
+        {people.length > 0 && (() => {
+          const seenNames = new Set<string>();
+          const uniqueFaces = people.filter((p) => { if (seenNames.has(p.name)) return false; seenNames.add(p.name); return true; });
+          return (
+            <section className="rcp-card p-3 sm:p-4">
+              <div className="flex items-center justify-between gap-2">
+                <SectionTitle>Faces to Remember</SectionTitle>
+                <span className="rcp-chip bg-[#e9e4ff] text-[color:var(--rcp-purple-deep)]">{uniqueFaces.length}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {uniqueFaces.map((person, i) => (
+                  <Link
+                    key={i}
+                    href={`/person/${encodedUrl(person.linkedinUrl)}`}
+                    title={`${person.name}${person.company ? ` · ${person.company}` : ''}`}
+                    className="group relative"
+                  >
+                    <PersonAvatar name={person.name} photo={person.photoUrl || undefined} size={44} />
+                    <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1b1530] px-2 py-1 text-[11px] font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                      {person.name}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          );
+        })()}
+
         {/* Intent card */}
         <section className="rcp-card space-y-3 p-3 sm:p-4">
           <div className="flex items-center justify-between gap-2">
             <SectionTitle>{intentLabel(primaryIntent)}</SectionTitle>
             <span className="rcp-chip bg-[#fff1c2] text-[#6b4a00]">
-              {people.length} people
+              {allFiltered.length}{pf ? ` of ${people.length}` : ''} people
             </span>
           </div>
 
-          {people.length === 0 ? (
-            <p className="text-sm text-[color:var(--rcp-muted)]">No people found for this intent yet.</p>
-          ) : (
+          <input
+            type="search"
+            placeholder="Filter by name or company…"
+            value={peopleFilter}
+            onChange={(e) => setPeopleFilter(e.target.value)}
+            className="w-full rounded-lg border border-[color:var(--rcp-border)] bg-white px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-[color:var(--rcp-purple)]"
+          />
+
+          {allFiltered.length === 0 && (
+            <p className="text-sm text-[color:var(--rcp-muted)]">{pf ? 'No matches.' : 'No people found yet.'}</p>
+          )}
+
+          {selectedUrls.size > 0 && (
+            <p className="text-xs text-[color:var(--rcp-purple)]">
+              {selectedUrls.size} selected for follow-up
+            </p>
+          )}
+
+          {primaryPeople.length > 0 && (
             <ul className="space-y-2">
-              {people.map((person, i) => (
-                <li key={i} className="rcp-item space-y-1 p-2.5 sm:p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <Link href={`/person/${encodedUrl(person.linkedinUrl)}`} className="rcp-link text-[0.95rem]">
-                        {person.name}
-                      </Link>
-                      <p className="truncate text-xs text-[color:var(--rcp-muted)]">{person.company}</p>
+              {primaryPeople.map((person, i) => {
+                const isChecked = selectedUrls.has(person.linkedinUrl);
+                return (
+                  <li key={i} className={`rcp-item space-y-1 p-2.5 sm:p-3 cursor-pointer transition-colors ${isChecked ? 'ring-2 ring-[color:var(--rcp-purple)]' : ''}`}
+                    onClick={() => togglePerson(person.linkedinUrl)}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <input type="checkbox" checked={isChecked} readOnly
+                          className="h-4 w-4 shrink-0 accent-[color:var(--rcp-purple)]" />
+                        <PersonAvatar name={person.name} photo={person.photoUrl || undefined} size={36} />
+                        <div className="min-w-0">
+                          <Link href={`/person/${encodedUrl(person.linkedinUrl)}`}
+                            className="rcp-link text-[0.95rem]"
+                            onClick={(e) => e.stopPropagation()}>
+                            {person.name}
+                          </Link>
+                          <p className="truncate text-xs text-[color:var(--rcp-muted)]">{person.company}</p>
+                        </div>
+                      </div>
+                      <WhyLink name={person.name} />
                     </div>
-                    <WhyLink name={person.name} />
-                  </div>
-                  {person.noteText && (
-                    <p className="line-clamp-2 text-sm leading-snug text-[#4a4270]">{person.noteText}</p>
-                  )}
-                </li>
-              ))}
+                    {person.noteText && (
+                      <p className="line-clamp-2 text-sm leading-snug text-[#4a4270]">{person.noteText}</p>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
+          )}
+
+          {otherPeople.length > 0 && (
+            <details className="group">
+              <summary className="flex cursor-pointer items-center gap-2 py-1 text-xs font-semibold uppercase tracking-wide text-[color:var(--rcp-muted)] hover:text-[color:var(--rcp-purple)]">
+                <span className="flex-1">Also met ({otherPeople.length})</span>
+                <span className="group-open:rotate-180 transition-transform">▾</span>
+              </summary>
+              <ul className="mt-2 space-y-2">
+                {otherPeople.map((person, i) => {
+                  const isChecked = selectedUrls.has(person.linkedinUrl);
+                  return (
+                    <li key={i} className={`rcp-item space-y-1 p-2.5 sm:p-3 opacity-80 cursor-pointer ${isChecked ? 'ring-2 ring-[color:var(--rcp-purple)] opacity-100' : ''}`}
+                      onClick={() => togglePerson(person.linkedinUrl)}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <input type="checkbox" checked={isChecked} readOnly
+                            className="h-4 w-4 shrink-0 accent-[color:var(--rcp-purple)]" />
+                          <div className="min-w-0">
+                            <Link href={`/person/${encodedUrl(person.linkedinUrl)}`}
+                              className="rcp-link text-[0.95rem]"
+                              onClick={(e) => e.stopPropagation()}>
+                              {person.name}
+                            </Link>
+                            <p className="truncate text-xs text-[color:var(--rcp-muted)]">{person.company}</p>
+                          </div>
+                        </div>
+                        <WhyLink name={person.name} />
+                      </div>
+                      {person.noteText && (
+                        <p className="line-clamp-2 text-sm leading-snug text-[#4a4270]">{person.noteText}</p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </details>
           )}
         </section>
 
@@ -248,15 +422,25 @@ export default function RecapPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <SectionTitle>Follow-ups</SectionTitle>
             {!generating && (
-              <button
-                type="button"
-                onClick={() => void handleGenerateFollowUps()}
-                disabled={generating}
-                className="rcp-btn"
-              >
-                <Sparkles aria-hidden className="h-4 w-4" />
-                {followUps.length === 0 ? 'Generate follow-ups' : 'Regenerate'}
-              </button>
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateFollowUps()}
+                  disabled={generating}
+                  className="rcp-btn"
+                >
+                  <Sparkles aria-hidden className="h-4 w-4" />
+                  {selectedUrls.size > 0
+                    ? `Generate for ${selectedUrls.size} selected`
+                    : followUps.length === 0 ? 'Generate follow-ups' : 'Regenerate all'}
+                </button>
+                {selectedUrls.size > 0 && (
+                  <button type="button" onClick={() => setSelectedUrls(new Set())}
+                    className="text-xs text-[color:var(--rcp-muted)] underline">
+                    Clear selection
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -311,6 +495,6 @@ export default function RecapPage() {
           )}
         </section>
       </div>
-    </RecapScene>
+    </Wrap>
   );
 }

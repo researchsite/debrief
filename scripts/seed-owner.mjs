@@ -4,7 +4,7 @@
  * Never commit or log personal data.
  */
 import { createRequire } from 'module';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -15,14 +15,53 @@ const { FalkorDB } = require('falkordb');
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const LINKEDIN_DIR = join(ROOT, '_private', 'linkedin');
+const EVENTS_DIR = join(ROOT, '_private', 'events');
 const GRAPH_NAME = 'debrief';
 
-// Owner's LinkedIn URL — update if known; used as the Me node key.
-// Derived from email prefix shassanchi → likely profile slug
-const OWNER_LINKEDIN_URL = 'https://www.linkedin.com/in/shassanchi';
-const EVENT_NAME = 'Patch the Conference Hackathon';
-const EVENT_DATE = '2026-10-24';
-const EVENT_VENUE = 'Bright Data, 625 2nd St, San Francisco';
+// Load .env.local so we connect to the same FalkorDB instance as the app
+function loadEnv() {
+  const envPath = join(ROOT, '.env.local');
+  if (!existsSync(envPath)) return;
+  for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+    const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+    if (m) process.env[m[1]] = m[2].replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
+  }
+}
+loadEnv();
+
+function getConnectOptions() {
+  const url = process.env.FALKORDB_URL;
+  if (url) return { url };
+  const host = process.env.FALKORDB_HOST ?? 'localhost';
+  const port = parseInt(process.env.FALKORDB_PORT ?? '6379', 10);
+  const username = process.env.FALKORDB_USERNAME;
+  const password = process.env.FALKORDB_PASSWORD;
+  const ssl = process.env.FALKORDB_SSL === 'true';
+  return {
+    socket: { host, port, tls: ssl },
+    ...(username && { username }),
+    ...(password && { password }),
+  };
+}
+
+// Owner's LinkedIn URL — used as the Me node key.
+// Must match the URL entered during /setup. If blank here, the script will
+// read the existing Me node's URL from the graph (safe to re-run).
+const OWNER_LINKEDIN_URL = 'https://www.linkedin.com/in/shamhc/';
+
+// Derive event name from saved event JSON files so the ATTENDED edge points to the right node
+function getEventNames() {
+  if (!existsSync(EVENTS_DIR)) return [];
+  return readdirSync(EVENTS_DIR)
+    .filter(f => f.endsWith('.json'))
+    .map(f => {
+      try {
+        const { extraction } = JSON.parse(readFileSync(join(EVENTS_DIR, f), 'utf-8'));
+        return extraction?.event ?? null;
+      } catch { return null; }
+    })
+    .filter(Boolean);
+}
 
 function parseCsv(filename, expectedFirstCol) {
   const text = readFileSync(join(LINKEDIN_DIR, filename), 'utf-8');
@@ -35,7 +74,7 @@ function parseCsv(filename, expectedFirstCol) {
 }
 
 async function run() {
-  const db = await FalkorDB.connect({ socket: { host: 'localhost', port: 6379 } });
+  const db = await FalkorDB.connect(getConnectOptions());
   const graph = db.selectGraph(GRAPH_NAME);
 
   const q = async (cypher, params = {}) => graph.query(cypher, { params });
@@ -52,11 +91,15 @@ async function run() {
   await q('MERGE (me:Me {linkedin_url: $url}) SET me.name = $name, me.headline = $headline',
     { url: OWNER_LINKEDIN_URL, name: ownerName, headline });
 
-  // 3. Create Event node
-  await q('MERGE (e:Event {name: $name}) SET e.date = $date, e.venue = $venue',
-    { name: EVENT_NAME, date: EVENT_DATE, venue: EVENT_VENUE });
-  await q('MATCH (me:Me {linkedin_url: $url}) MATCH (e:Event {name: $name}) MERGE (me)-[:ATTENDED]->(e)',
-    { url: OWNER_LINKEDIN_URL, name: EVENT_NAME });
+  // 3. Create Event nodes from saved JSON files and link Me-[:ATTENDED]->Event
+  const events = getEventNames();
+  for (const ev of events) {
+    await q('MERGE (e:Event {name: $name}) SET e.date = $date, e.venue = $venue',
+      { name: ev.name, date: ev.date ?? '', venue: ev.venue ?? '' });
+    await q('MATCH (me:Me {linkedin_url: $url}) MATCH (e:Event {name: $name}) MERGE (me)-[:ATTENDED]->(e)',
+      { url: OWNER_LINKEDIN_URL, name: ev.name });
+    console.log(`  Linked Me-[:ATTENDED]->(${ev.name})`);
+  }
 
   // 4. Parse Positions.csv
   const positions = parseCsv('Positions.csv', 'Company Name');

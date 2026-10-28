@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { parseLinkedInCsv } from '../../lib/linkedin-csv';
 
@@ -69,6 +69,24 @@ export default function SetupPage() {
   // Section 6
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+
+  // Pre-populate from graph on mount
+  useEffect(() => {
+    fetch('/api/setup')
+      .then(r => r.ok ? r.json() : null)
+      .then((res: { data?: { name?: string; linkedinUrl?: string; eventName?: string; eventDate?: string; targetRole?: string; intents?: string[]; primaryIntent?: string } | null } | null) => {
+        const d = res?.data;
+        if (!d) return;
+        if (d.name) setName(d.name);
+        if (d.linkedinUrl) setLinkedinUrl(d.linkedinUrl);
+        if (d.eventName) setEventName(d.eventName);
+        if (d.eventDate) setEventDate(d.eventDate);
+        if (d.targetRole) setTargetRole(d.targetRole);
+        if (d.intents?.length) setSelectedIntents(new Set(d.intents as IntentValue[]));
+        if (d.primaryIntent) setPrimaryIntent(d.primaryIntent as IntentValue);
+      })
+      .catch(() => {});
+  }, []);
 
   function toggleIntent(value: IntentValue) {
     setSelectedIntents((prev) => {
@@ -149,7 +167,7 @@ export default function SetupPage() {
       const res = await fetch('/api/import/profile', { method: 'POST', body: fd });
       const data = (await res.json()) as ImportResult & { error?: string };
       if (!res.ok) {
-        setImportError(data.error ?? 'Import failed');
+        setImportError(data.error || 'Import failed');
       } else {
         setImportResult(data);
       }
@@ -346,10 +364,10 @@ export default function SetupPage() {
                 tabIndex={0}
                 onClick={() => toggleIntent(value)}
                 onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleIntent(value)}
-                className={`relative flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors text-sm cursor-pointer select-none ${
+                className={`relative flex flex-col items-start gap-0.5 rounded-lg border-2 px-3 py-2 text-left transition-colors text-sm cursor-pointer select-none ${
                   selected
-                    ? 'border-primary bg-primary/10 text-foreground'
-                    : 'border-border bg-background text-muted-foreground hover:bg-muted'
+                    ? 'border-[var(--px-ink)] bg-[var(--px-sun)] text-[var(--px-ink)] shadow-[3px_3px_0_0_var(--px-ink)]'
+                    : 'border-border bg-background text-muted-foreground hover:bg-[var(--px-cream)] hover:border-[var(--px-ink)]'
                 }`}
               >
                 <span className="text-base leading-none">{emoji}</span>

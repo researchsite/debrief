@@ -15,7 +15,7 @@ import { POST } from '../app/api/recap/followups/route';
 function person(id: number): RecapPerson {
   return {
     name: `Contact ${id}`, linkedinUrl: `https://linkedin.com/in/contact-${id}`,
-    headline: '', company: 'Company', noteText: '', contextBullets: [],
+    headline: '', company: 'Company', noteText: '', photoUrl: '', intentMatch: false, contextBullets: [],
   };
 }
 
@@ -26,10 +26,18 @@ beforeEach(() => {
   mocks.jsonCompletion.mockResolvedValue({ message: 'Generated message' });
 });
 
+function makeReq(body: unknown = {}) {
+  return new Request('http://localhost/api/recap/followups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }) as import('next/server').NextRequest;
+}
+
 describe('follow-up generation API', () => {
   it('generates once per contact, even when the graph returns repeated rows', async () => {
     mocks.getRecapPeopleForIntent.mockResolvedValue([person(1), person(1), person(2)]);
-    const response = await POST();
+    const response = await POST(makeReq());
     const body = await response.json();
     expect(body.ok).toBe(true);
     expect(body.drafts.map((draft: { personUrl: string }) => draft.personUrl))
@@ -43,7 +51,7 @@ describe('follow-up generation API', () => {
       { ...person(0), linkedinUrl: '' }, person(1), person(1),
       person(2), person(3), person(4), person(5), person(6),
     ]);
-    const body = await (await POST()).json();
+    const body = await (await POST(makeReq())).json();
     expect(body.drafts.map((draft: { personUrl: string }) => draft.personUrl))
       .toEqual([1, 2, 3, 4, 5].map(id => person(id).linkedinUrl));
     expect(mocks.saveFollowUp).toHaveBeenCalledTimes(5);

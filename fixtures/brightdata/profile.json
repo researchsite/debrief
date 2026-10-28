@@ -1,22 +1,156 @@
 [
   {
-    "name": "Alex Rivera",
-    "headline": "Staff Engineer at Stripe",
-    "linkedin_url": "https://www.linkedin.com/in/alex-rivera-fake",
+    "name": "Jordan Mercer",
+    "headline": "Marketing & Events at Bright Data",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-jordan-mercer-00001/",
     "city": "San Francisco, CA",
-    "current_company": "Stripe",
-    "past_companies": ["Plaid", "Square"],
-    "schools": ["UC Berkeley"],
-    "skills": ["Payments", "APIs", "Python", "Go"]
+    "current_company": "Bright Data",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Marketing", "Community Events", "AI Events", "Professional Networking"],
+    "photo_url": ""
   },
   {
-    "name": "Maya Patel",
-    "headline": "Product Manager at Notion",
-    "linkedin_url": "https://www.linkedin.com/in/maya-patel-fake",
+    "name": "Sam Chen",
+    "headline": "Developer Relations at FalkorDB",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-sam-chen-00002/",
     "city": "San Francisco, CA",
-    "current_company": "Notion",
-    "past_companies": ["Asana"],
-    "schools": ["Stanford University"],
-    "skills": ["Product Management", "AI", "Design Thinking"]
+    "current_company": "FalkorDB",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Graph Databases", "Developer Relations", "Cypher", "Cloud Deployment"],
+    "photo_url": ""
+  },
+  {
+    "name": "Chris Torres",
+    "headline": "Solutions Engineer at Bright Data",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-chris-torres-00003/",
+    "city": "New York, NY",
+    "current_company": "Bright Data",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Web Scraping", "Data Access", "API Integration", "Python"],
+    "photo_url": ""
+  },
+  {
+    "name": "Dev Sharma",
+    "headline": "Developer Advocate at Qodo",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-dev-sharma-00004/",
+    "city": "Amsterdam, Netherlands",
+    "current_company": "Qodo",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Developer Advocacy", "AI Tools", "Code Review", "Community Building"],
+    "photo_url": ""
+  },
+  {
+    "name": "Eli Goldman",
+    "headline": "Multi-Agent Architecture & AI Systems",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-eli-goldman-00005/",
+    "city": "San Francisco, CA",
+    "current_company": "",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Multi-Agent Systems", "AI Architecture", "LLM Orchestration", "Python"],
+    "photo_url": ""
+  },
+  {
+    "name": "Maya Singh",
+    "headline": "Founder at AgentGlass",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-maya-singh-00006/",
+    "city": "San Francisco, CA",
+    "current_company": "AgentGlass",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["AI Agent Evaluation", "Production AI", "Observability", "Founder"],
+    "photo_url": ""
+  },
+  {
+    "name": "Aryan Patel",
+    "headline": "Founder at Spawnpoint",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-aryan-patel-00007/",
+    "city": "San Francisco, CA",
+    "current_company": "Spawnpoint",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Cloud Deployment", "MCP", "Coding Agents", "DevOps"],
+    "photo_url": ""
+  },
+  {
+    "name": "Marco Rivera",
+    "headline": "Founder at One Dollar Computer",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-marco-rivera-00008/",
+    "city": "San Francisco, CA",
+    "current_company": "One Dollar Computer",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Embedded Systems", "STEM Education", "Hardware", "Robotics"],
+    "photo_url": ""
+  },
+  {
+    "name": "Robin Park",
+    "headline": "Community Organizer & Tech Events",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-robin-park-00009/",
+    "city": "San Francisco, CA",
+    "current_company": "",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Community Organizing", "Event Planning", "Nonprofit", "Social Impact"],
+    "photo_url": ""
+  },
+  {
+    "name": "Ash Kumar",
+    "headline": "Backend & Distributed Systems Engineer",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-ash-kumar-00010/",
+    "city": "San Francisco, CA",
+    "current_company": "",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Distributed Systems", "Go", "Kafka", "PostgreSQL"],
+    "photo_url": ""
+  },
+  {
+    "name": "Ravi Reddy",
+    "headline": "Geospatial & Data Engineering Specialist",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-ravi-reddy-00011/",
+    "city": "San Francisco, CA",
+    "current_company": "",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["GIS", "Geospatial Data", "PostGIS", "Data Engineering"],
+    "photo_url": ""
+  },
+  {
+    "name": "Priya Madhu",
+    "headline": "Senior Data Engineer",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-priya-madhu-00012/",
+    "city": "San Francisco, CA",
+    "current_company": "",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Data Engineering", "Spark", "dbt", "Data Platforms"],
+    "photo_url": ""
+  },
+  {
+    "name": "Dhruv Adala",
+    "headline": "UX & Backend Engineer",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-dhruv-adala-00013/",
+    "city": "San Francisco, CA",
+    "current_company": "",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["UX Design", "React", "Next.js", "TypeScript"],
+    "photo_url": ""
+  },
+  {
+    "name": "Abhi Bharaj",
+    "headline": "Full-Stack & AI Engineer",
+    "linkedin_url": "https://www.linkedin.com/in/fictional-abhi-bharaj-00014/",
+    "city": "San Francisco, CA",
+    "current_company": "",
+    "past_companies": [],
+    "schools": [],
+    "skills": ["Python", "MERN Stack", "Full-Stack", "AI Applications"],
+    "photo_url": ""
   }
 ]

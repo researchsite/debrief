@@ -73,7 +73,8 @@ export function transcriptPersonName(name: string, index: number): string {
 }
 
 export function transcriptPersonUrl(name: string, filename: string, index: number): string {
+  // Always include index so two different Seans in the same transcript get different Person nodes
   return name
-    ? `placeholder:${encodeURIComponent(name.replace(/\s+/g, '-').toLowerCase())}`
+    ? `placeholder:${encodeURIComponent(name.replace(/\s+/g, '-').toLowerCase())}:${index}`
     : `placeholder:transcript:${encodeURIComponent(filename)}:${index}`;
 }

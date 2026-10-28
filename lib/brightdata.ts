@@ -11,6 +11,7 @@ export interface BDProfile {
   past_companies: string[];
   schools: string[];
   skills: string[];
+  photo_url?: string;
 }
 
 export interface SerpResult {
@@ -144,16 +145,18 @@ export async function serpSearch(
     return text ? [{ url: requestBody.url, title: `Google results for ${query}`, snippet: text.slice(0, 4000) }] : [];
   }
 
-  const result = (await response.json()) as { status_code: number; body: string };
-  const html = result.body ?? '';
-  return parseSerpHtml(html);
+  const result = (await response.json()) as { status_code: number; body: string | BDSerpResponse };
+  return parseSerpHtml(result.body ?? '');
 }
 
 /**
  * Fetch a web page via Bright Data's Web Unlocker.
  * In mock mode returns fixture event page HTML.
  */
-export async function fetchPage(url: string, options: { signal?: AbortSignal } = {}): Promise<string> {
+export async function fetchPage(
+  url: string,
+  options: { signal?: AbortSignal; renderJs?: boolean } = {},
+): Promise<string> {
   if (isMock) {
     return readFixtureRaw('event_page.html');
   }
@@ -161,18 +164,17 @@ export async function fetchPage(url: string, options: { signal?: AbortSignal } =
   const apiKey = process.env.BRIGHTDATA_API_KEY;
   const zone = process.env.BRIGHTDATA_UNLOCKER_ZONE ?? 'web_unlocker1';
 
+  const body: Record<string, unknown> = { zone, url, format: 'json' };
+  if (options.renderJs) body.render_js = true;
+
   const response = await fetch('https://api.brightdata.com/request', {
     method: 'POST',
-    signal: options.signal ?? AbortSignal.timeout(20_000),
+    signal: options.signal ?? AbortSignal.timeout(40_000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      zone,
-      url,
-      format: 'json',
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -195,15 +197,17 @@ interface BDSerpResponse {
   organic?: BDSerpOrganic[];
 }
 
-function parseSerpHtml(body: string): SerpResult[] {
+function parseSerpHtml(body: string | BDSerpResponse): SerpResult[] {
   try {
-    const parsed = JSON.parse(body) as BDSerpResponse;
+    // Bright Data with format:'json' may return body as a pre-parsed object
+    const parsed: BDSerpResponse = typeof body === 'string' ? JSON.parse(body) as BDSerpResponse : body;
     return (parsed.organic ?? []).slice(0, 5).map((r) => ({
       url: r.link ?? '',
       title: r.title ?? '',
       snippet: r.description ?? '',
     }));
   } catch {
+    if (typeof body !== 'string') return [];
     const results: SerpResult[] = [];
     const headingPattern = /<h3[^>]*>([\s\S]*?)<\/h3>/gi;
     const hrefPattern = /href=\\?["']([^"']+)\\?["']/gi;
